@@ -3,10 +3,12 @@ use std::path::PathBuf;
 use gpui_kit::*;
 use serde_json::json;
 
-use super::{Media, MissiveApp};
+use super::{GifFrames, Media, MissiveApp};
 use crate::model::{Attachment, MediaResult, Message};
 
 const MAX_IN_FLIGHT: usize = 6;
+const MAX_GIF_DECODES: usize = 2;
+const MAX_CACHED_GIFS: usize = 12;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) enum MediaJob {
@@ -239,6 +241,97 @@ impl MissiveApp {
                 });
             })
             .detach();
+        }
+    }
+
+    pub(crate) fn gif_source(
+        &self,
+        message: &Message,
+        attachment: &Attachment,
+    ) -> Option<ImageSource> {
+        if !attachment.gif || !crate::gif_video::SUPPORTED || attachment.id.is_empty() {
+            return None;
+        }
+        let key = super::media_key(&message.id, &attachment.id);
+        match self.gifs.get(&key) {
+            Some(GifFrames::Ready(image)) => return Some(image.clone()),
+            Some(GifFrames::Decoding) | Some(GifFrames::Failed) => return None,
+            None => {}
+        }
+        match self.state(&key) {
+            Some(Media::Ready(path)) => {
+                let mut queue = self.gif_queue.borrow_mut();
+                if !queue.iter().any(|(queued, _)| *queued == key) {
+                    queue.push((key, path.clone()));
+                }
+            }
+            Some(Media::Loading) | Some(Media::Failed) => {}
+            None => self.enqueue(MediaJob::Full {
+                thread_id: message.thread_id.clone(),
+                message_id: message.id.clone(),
+                attachment_id: attachment.id.clone(),
+            }),
+        }
+        None
+    }
+
+    pub(crate) fn pump_gifs(&mut self, cx: &mut Context<Self>) {
+        while self.gif_in_flight < MAX_GIF_DECODES {
+            let Some((key, path)) = self.gif_queue.borrow_mut().pop() else {
+                break;
+            };
+            if self.gifs.contains_key(&key) {
+                continue;
+            }
+            if crate::gif_video::is_gif_file(&path) {
+                self.gifs.insert(key.clone(), GifFrames::Ready(path.into()));
+                self.remember_gif(key, cx);
+                cx.notify();
+                continue;
+            }
+            self.gifs.insert(key.clone(), GifFrames::Decoding);
+            self.gif_in_flight += 1;
+            let (tx, rx) = futures::channel::oneshot::channel();
+            let spawned = std::thread::Builder::new()
+                .name("gif-decode".into())
+                .spawn(move || {
+                    let _ = tx.send(crate::gif_video::decode(&path));
+                });
+            if let Err(err) = spawned {
+                eprintln!("[app] gif decoder not started: {err}");
+            }
+            cx.spawn(async move |this, cx| {
+                let result = rx.await;
+                let _ = this.update(cx, |this, cx| {
+                    this.gif_in_flight = this.gif_in_flight.saturating_sub(1);
+                    match result {
+                        Ok(Ok(image)) => {
+                            this.gifs.insert(key.clone(), GifFrames::Ready(image.into()));
+                            this.remember_gif(key, cx);
+                        }
+                        Ok(Err(err)) => {
+                            eprintln!("[app] gif decode failed: {err:#}");
+                            this.gifs.insert(key, GifFrames::Failed);
+                        }
+                        Err(_) => {
+                            this.gifs.insert(key, GifFrames::Failed);
+                        }
+                    }
+                    this.pump_gifs(cx);
+                    cx.notify();
+                });
+            })
+            .detach();
+        }
+    }
+
+    fn remember_gif(&mut self, key: String, cx: &mut Context<Self>) {
+        self.gif_order.push(key);
+        while self.gif_order.len() > MAX_CACHED_GIFS {
+            let evicted = self.gif_order.remove(0);
+            if let Some(GifFrames::Ready(ImageSource::Render(image))) = self.gifs.remove(&evicted) {
+                cx.drop_image(image, None);
+            }
         }
     }
 

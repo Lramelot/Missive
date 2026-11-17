@@ -114,8 +114,8 @@ fn parse_time(raw: &str) -> Option<u16> {
     if hours.is_empty() || hours.len() > 2 || !hours.chars().all(|c| c.is_ascii_digit()) {
         return None;
     }
-    let minutes_ok = minutes.is_empty()
-        || (minutes.len() == 2 && minutes.chars().all(|c| c.is_ascii_digit()));
+    let minutes_ok =
+        minutes.is_empty() || (minutes.len() == 2 && minutes.chars().all(|c| c.is_ascii_digit()));
     if !minutes_ok {
         return None;
     }
@@ -235,8 +235,7 @@ impl MissiveApp {
             .map(|field| &field.input)
             .chain(forms.quiet.iter().map(|(_, field)| &field.input))
             .chain(forms.snippet.iter().map(|editor| &editor.shortcut));
-        inputs
-            .any(|input| input.read(cx).focus_handle(cx).is_focused(window))
+        inputs.any(|input| input.read(cx).focus_handle(cx).is_focused(window))
             || forms
                 .snippet
                 .as_ref()
@@ -251,9 +250,8 @@ impl MissiveApp {
         let input = match existing {
             Some(input) => input,
             None => {
-                let input = cx.new(|cx| {
-                    InputState::new(window, cx).placeholder("Mot ou expression")
-                });
+                let input =
+                    cx.new(|cx| InputState::new(window, cx).placeholder("Mot ou expression"));
                 let subscription =
                     cx.subscribe_in(&input, window, |this, _, event: &InputEvent, window, cx| {
                         if let InputEvent::PressEnter { .. } = event {
@@ -383,7 +381,12 @@ impl MissiveApp {
         self.close_quiet_field(cx);
     }
 
-    fn remove_priority_thread(&mut self, thread_id: &str, window: &mut Window, cx: &mut Context<Self>) {
+    fn remove_priority_thread(
+        &mut self,
+        thread_id: &str,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         self.update_settings(window, cx, |settings| {
             settings.priority_threads.retain(|id| id != thread_id)
         });
@@ -410,12 +413,15 @@ impl MissiveApp {
                 .placeholder("Texte inséré dans le message")
                 .default_value(current.text.clone())
         });
-        let subscription =
-            cx.subscribe_in(&shortcut, window, |this, _, event: &InputEvent, window, cx| {
+        let subscription = cx.subscribe_in(
+            &shortcut,
+            window,
+            |this, _, event: &InputEvent, window, cx| {
                 if let InputEvent::PressEnter { .. } = event {
                     this.submit_snippet(window, cx);
                 }
-            });
+            },
+        );
         shortcut.update(cx, |input, cx| input.focus(window, cx));
         let forms = cx.default_global::<SettingsForms>();
         forms.snippet = Some(SnippetEditor {
@@ -472,7 +478,12 @@ impl MissiveApp {
         });
     }
 
-    fn render_keywords(&self, forms: &FormsView, p: &Palette, cx: &mut Context<Self>) -> AnyElement {
+    fn render_keywords(
+        &self,
+        forms: &FormsView,
+        p: &Palette,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
         let hover = p.hover;
         let chips: Vec<AnyElement> = self
             .settings
@@ -500,7 +511,11 @@ impl MissiveApp {
                             .justify_center()
                             .cursor_pointer()
                             .hover(move |style| style.bg(hover))
-                            .child(Icon::new(IconName::X).size(px(13.)).text_color(p.text_muted))
+                            .child(
+                                Icon::new(IconName::X)
+                                    .size(px(13.))
+                                    .text_color(p.text_muted),
+                            )
                             .on_click(cx.listener(move |this, _, window, cx| {
                                 this.remove_keyword(index, window, cx)
                             })),
@@ -529,7 +544,9 @@ impl MissiveApp {
                                 .ghost()
                                 .small()
                                 .label("Fermer")
-                                .on_click(cx.listener(|this, _, _, cx| this.close_keyword_field(cx))),
+                                .on_click(
+                                    cx.listener(|this, _, _, cx| this.close_keyword_field(cx)),
+                                ),
                         ),
                 )
                 .children(error_line(forms.error_for(Form::Keyword), p))
@@ -605,13 +622,18 @@ impl MissiveApp {
             .cursor_pointer()
             .hover(move |style| style.bg(hover))
             .child(SharedString::from(format_time(minutes)))
-            .on_click(cx.listener(move |this, _, window, cx| {
-                this.open_quiet_field(which, window, cx)
-            }))
+            .on_click(
+                cx.listener(move |this, _, window, cx| this.open_quiet_field(which, window, cx)),
+            )
             .into_any_element()
     }
 
-    fn render_quiet_hours(&self, forms: &FormsView, p: &Palette, cx: &mut Context<Self>) -> AnyElement {
+    fn render_quiet_hours(
+        &self,
+        forms: &FormsView,
+        p: &Palette,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
         let enabled = self.settings.quiet_hours.enabled;
         let start = self.quiet_time(QuietField::Start, forms, p, cx);
         let end = self.quiet_time(QuietField::End, forms, p, cx);
@@ -648,40 +670,39 @@ impl MissiveApp {
     }
 
     fn render_priority_threads(&self, p: &Palette, cx: &mut Context<Self>) -> AnyElement {
-        let rows: Vec<AnyElement> = self
-            .settings
-            .priority_threads
-            .iter()
-            .enumerate()
-            .map(|(index, thread_id)| {
-                let name = self
-                    .threads
-                    .iter()
-                    .find(|thread| thread.id == *thread_id)
-                    .map(|thread| thread.name.clone())
-                    .filter(|name| !name.trim().is_empty())
-                    .unwrap_or_else(|| "Conversation indisponible".to_string());
-                let id = thread_id.clone();
-                h_flex()
-                    .gap_3()
-                    .child(
-                        div()
-                            .flex_1()
-                            .min_w_0()
-                            .truncate()
-                            .text_size(px(13.5))
-                            .child(SharedString::from(name)),
-                    )
-                    .child(
-                        icon_button(("priority-remove", index), IconName::X, false, p).on_click(
-                            cx.listener(move |this, _, window, cx| {
-                                this.remove_priority_thread(&id, window, cx)
-                            }),
-                        ),
-                    )
-                    .into_any_element()
-            })
-            .collect();
+        let rows: Vec<AnyElement> =
+            self.settings
+                .priority_threads
+                .iter()
+                .enumerate()
+                .map(|(index, thread_id)| {
+                    let name = self
+                        .threads
+                        .iter()
+                        .find(|thread| thread.id == *thread_id)
+                        .map(|thread| thread.name.clone())
+                        .filter(|name| !name.trim().is_empty())
+                        .unwrap_or_else(|| "Conversation indisponible".to_string());
+                    let id = thread_id.clone();
+                    h_flex()
+                        .gap_3()
+                        .child(
+                            div()
+                                .flex_1()
+                                .min_w_0()
+                                .truncate()
+                                .text_size(px(13.5))
+                                .child(SharedString::from(name)),
+                        )
+                        .child(
+                            icon_button(("priority-remove", index), IconName::X, false, p)
+                                .on_click(cx.listener(move |this, _, window, cx| {
+                                    this.remove_priority_thread(&id, window, cx)
+                                })),
+                        )
+                        .into_any_element()
+                })
+                .collect();
         v_flex()
             .py_2()
             .gap_1()
@@ -703,7 +724,12 @@ impl MissiveApp {
             .into_any_element()
     }
 
-    fn render_snippets(&self, forms: &FormsView, p: &Palette, cx: &mut Context<Self>) -> AnyElement {
+    fn render_snippets(
+        &self,
+        forms: &FormsView,
+        p: &Palette,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
         let editing_index = forms.snippet.as_ref().and_then(|(index, _, _)| *index);
         let rows: Vec<AnyElement> = self
             .settings
@@ -808,7 +834,9 @@ impl MissiveApp {
                                 .ghost()
                                 .small()
                                 .label("Annuler")
-                                .on_click(cx.listener(|this, _, _, cx| this.close_snippet_editor(cx))),
+                                .on_click(
+                                    cx.listener(|this, _, _, cx| this.close_snippet_editor(cx)),
+                                ),
                         )
                         .child(
                             Button::new("snippet-save")
@@ -912,9 +940,9 @@ impl MissiveApp {
                     el.text_color(p.text_muted).hover(move |s| s.bg(hover))
                 })
                 .child(label)
-                .on_click(cx.listener(move |this, _, window, cx| {
-                    this.set_text_size(value, window, cx)
-                }))
+                .on_click(
+                    cx.listener(move |this, _, window, cx| this.set_text_size(value, window, cx)),
+                )
                 .into_any_element()
         })
         .collect();
@@ -1069,16 +1097,17 @@ impl MissiveApp {
                     .border_color(p.divider)
                     .bg(p.panel)
                     .shadow_lg()
-                    .overflow_y_scroll()
-                    .track_scroll(&self.settings_scroll)
-                    .vertical_scrollbar(&self.settings_scroll)
-                    .px_7()
-                    .pt_6()
-                    .pb_7()
+                    .overflow_hidden()
                     .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
                     .child(
                         h_flex()
+                            .flex_none()
                             .justify_between()
+                            .px_7()
+                            .pt_6()
+                            .pb_3()
+                            .border_b_1()
+                            .border_color(p.divider)
                             .child(
                                 div()
                                     .text_size(px(21.))
@@ -1091,6 +1120,13 @@ impl MissiveApp {
                                 ),
                             ),
                     )
+                    .child(
+                        v_flex()
+                            .id("settings-body")
+                            .flex_1()
+                            .min_h_0()
+                            .px_7()
+                            .pb_7()
                     .child(section("NOTIFICATIONS"))
                     .child(self.setting_row(
                         "notifications",
@@ -1267,6 +1303,8 @@ impl MissiveApp {
                                         cx.listener(|this, _, window, cx| this.logout(window, cx)),
                                     ),
                             ),
+                    )
+                    .overflow_y_scrollbar(),
                     ),
             )
     }
@@ -1357,7 +1395,10 @@ mod tests {
 
     #[::core::prelude::v1::test]
     fn keyword_is_trimmed_and_validated() {
-        assert_eq!(normalize_keyword("  appel   d'offres "), Ok("appel d'offres".into()));
+        assert_eq!(
+            normalize_keyword("  appel   d'offres "),
+            Ok("appel d'offres".into())
+        );
         assert!(normalize_keyword("   ").is_err());
         assert!(normalize_keyword("!!!").is_err());
         assert!(normalize_keyword(&"a".repeat(61)).is_err());

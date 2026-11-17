@@ -81,7 +81,84 @@ fn panic_line(thread: &str, location: &str, message: &str) -> String {
     format!("[panic] thread '{thread}' at {location}: {message}")
 }
 
+const RESTART_ARG: &str = "--restarted-after";
+const RESTART_COOLDOWN_SECS: u64 = 60;
+const RESTART_WAIT: Duration = Duration::from_secs(15);
+
+pub fn was_restarted() -> bool {
+    std::env::args().any(|arg| arg == RESTART_ARG)
+}
+
+fn crashed_pid(args: impl IntoIterator<Item = String>) -> Option<u32> {
+    let mut args = args.into_iter();
+    while let Some(arg) = args.next() {
+        if arg == RESTART_ARG {
+            return args.next().and_then(|pid| pid.parse().ok());
+        }
+    }
+    None
+}
+
+fn restart_allowed(last: Option<&str>, now_secs: u64) -> bool {
+    last.and_then(|text| text.trim().parse::<u64>().ok())
+        .is_none_or(|last| now_secs.saturating_sub(last) >= RESTART_COOLDOWN_SECS)
+}
+
+fn relaunch_args(args: impl IntoIterator<Item = String>, pid: u32) -> Vec<String> {
+    let mut kept: Vec<String> = args.into_iter().filter(|arg| arg == "--demo").collect();
+    kept.push(RESTART_ARG.to_string());
+    kept.push(pid.to_string());
+    kept
+}
+
+fn relaunch_after_crash(marker: &Path) {
+    if !cfg!(panic = "abort") {
+        return;
+    }
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|elapsed| elapsed.as_secs())
+        .unwrap_or(0);
+    if !restart_allowed(fs::read_to_string(marker).ok().as_deref(), now) {
+        return;
+    }
+    let _ = fs::write(marker, now.to_string());
+    let Ok(exe) = std::env::current_exe() else {
+        return;
+    };
+    let _ = std::process::Command::new(exe)
+        .args(relaunch_args(std::env::args().skip(1), std::process::id()))
+        .spawn();
+}
+
+pub fn wait_for_crashed_instance() {
+    let Some(pid) = crashed_pid(std::env::args().skip(1)) else {
+        return;
+    };
+    wait_for_exit(pid);
+    std::thread::sleep(Duration::from_millis(800));
+}
+
+#[cfg(windows)]
+fn wait_for_exit(pid: u32) {
+    use windows_sys::Win32::Foundation::CloseHandle;
+    use windows_sys::Win32::System::Threading::{OpenProcess, PROCESS_SYNCHRONIZE, WaitForSingleObject};
+    unsafe {
+        let handle = OpenProcess(PROCESS_SYNCHRONIZE, 0, pid);
+        if !handle.is_null() {
+            WaitForSingleObject(handle, RESTART_WAIT.as_millis() as u32);
+            CloseHandle(handle);
+        }
+    }
+}
+
+#[cfg(not(windows))]
+fn wait_for_exit(_: u32) {
+    std::thread::sleep(Duration::from_secs(2));
+}
+
 fn install_panic_hook(path: PathBuf) {
+    let marker = path.with_file_name(format!("{}-restart.txt", base_name()));
     let previous = std::panic::take_hook();
     std::panic::set_hook(Box::new(move |info| {
         let thread = std::thread::current();
@@ -101,6 +178,7 @@ fn install_panic_hook(path: PathBuf) {
                 .and_then(|_| file.flush());
         }
         previous(info);
+        relaunch_after_crash(&marker);
     }));
 }
 
@@ -465,6 +543,27 @@ mod tests {
         assert_eq!(fs::read_to_string(rotated_path(&dir, "missive", 1)).unwrap(), "history");
         assert!(rotated_path(&dir, "missive", 2).is_dir());
         let _ = fs::remove_dir_all(dir);
+    }
+
+    #[::core::prelude::v1::test]
+    fn restart_arguments_round_trip_and_keep_only_demo() {
+        let args = super::relaunch_args(
+            ["--background".to_string(), "--demo".to_string(), "--restarted-after".into(), "9".into()],
+            42,
+        );
+        assert_eq!(args, ["--demo", "--restarted-after", "42"]);
+        assert_eq!(super::crashed_pid(args), Some(42));
+        assert_eq!(super::crashed_pid(["--demo".to_string()]), None);
+        assert_eq!(super::crashed_pid(["--restarted-after".to_string(), "x".into()]), None);
+    }
+
+    #[::core::prelude::v1::test]
+    fn restart_is_throttled() {
+        assert!(super::restart_allowed(None, 1_000));
+        assert!(super::restart_allowed(Some("garbage"), 1_000));
+        assert!(!super::restart_allowed(Some("990"), 1_000));
+        assert!(!super::restart_allowed(Some("941"), 1_000));
+        assert!(super::restart_allowed(Some("940\n"), 1_000));
     }
 
     #[::core::prelude::v1::test]

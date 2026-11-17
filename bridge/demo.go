@@ -385,6 +385,9 @@ func (d *DemoBackend) makeMessage(threadID string, e2ee bool, ts int64, outgoing
 	case roll == 7 && !outgoing:
 		msg.Text = ""
 		msg.Deleted = true
+	case roll == 10:
+		msg.Text = ""
+		msg.Attachments = []Attachment{{ID: "gif_0", Kind: "video", Gif: true, FileName: "GIF.mp4", MimeType: "video/mp4", Width: 320, Height: 240, DurationMS: 3000}}
 	}
 	if members := d.members[threadID]; len(members) > 1 && !msg.Deleted && msg.Text != "" && len(msg.Attachments) == 0 && d.rng.IntN(6) == 0 {
 		target := members[d.rng.IntN(len(members))]

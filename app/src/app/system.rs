@@ -54,8 +54,10 @@ impl MissiveApp {
         if desktop::started_in_background() && self.tray.is_some() {
             desktop::hide_window(window);
         }
-        desktop::repair_start_menu_shortcut();
         cx.on_app_quit(|_, _| async { diagnostics::flush() }).detach();
+        if diagnostics::was_restarted() {
+            self.show_toast("Missive a redémarré après une erreur", cx);
+        }
 
         self._system_task = Some(cx.spawn_in(window, async move |this, cx| {
             loop {
@@ -81,6 +83,9 @@ impl MissiveApp {
                     }
                     if !this.media_queue.borrow().is_empty() {
                         this.pump_media(cx);
+                    }
+                    if !this.gif_queue.borrow().is_empty() {
+                        this.pump_gifs(cx);
                     }
                     if this
                         .toast

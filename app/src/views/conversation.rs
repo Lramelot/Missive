@@ -416,16 +416,36 @@ impl MissiveApp {
                     )
                     .child(div().text_size(px(13.)).child(self.subtitle(thread, p))),
             )
-            .child(self.member_stack(thread, p))
+            .child(match profile_url(thread) {
+                Some(url) => div()
+                    .id("open-profile")
+                    .flex_none()
+                    .rounded_full()
+                    .cursor_pointer()
+                    .hover(|style| style.opacity(0.85))
+                    .tooltip(|window, cx| {
+                        Tooltip::new("Voir le profil Facebook").build(window, cx)
+                    })
+                    .on_click(move |_, _, cx| crate::desktop::open_web(&url, cx))
+                    .child(self.member_stack(thread, p))
+                    .into_any_element(),
+                None => self.member_stack(thread, p),
+            })
             .child(
                 h_flex()
                     .flex_none()
                     .child(
                         icon_button("open-popout", IconName::ExternalLink, false, p)
+                            .tooltip(|window, cx| {
+                                Tooltip::new("Ouvrir dans une fenêtre séparée").build(window, cx)
+                            })
                             .on_click(cx.listener(|this, _, _, cx| this.open_popout(cx))),
                     )
                     .child(
                         icon_button("toggle-info", IconName::Info, self.info_open, p)
+                            .tooltip(|window, cx| {
+                                Tooltip::new("Informations sur la conversation").build(window, cx)
+                            })
                             .on_click(cx.listener(|this, _, _, cx| this.toggle_info(cx))),
                     ),
             )
@@ -1003,6 +1023,15 @@ impl MissiveApp {
         )
         .into_any_element()
     }
+}
+
+fn profile_url(thread: &Thread) -> Option<String> {
+    if thread.is_group {
+        return None;
+    }
+    let peer = thread.peer_id.as_deref()?;
+    (!peer.is_empty() && peer.chars().all(|c| c.is_ascii_digit()))
+        .then(|| format!("https://www.facebook.com/profile.php?id={peer}"))
 }
 
 fn toggle_switch(on: bool, p: &Palette) -> Div {

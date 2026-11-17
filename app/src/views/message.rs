@@ -5,7 +5,7 @@ use gpui_kit::{prelude::FluentBuilder as _, *};
 use super::conversation::{COLUMN_GUTTER, COLUMN_WIDTH};
 use super::widgets::{avatar, find_urls, format_duration, format_separator};
 use crate::{
-    app::{MissiveApp, Outgoing, describe_attachments},
+    app::{GifFrames, Media, MissiveApp, Outgoing, describe_attachments},
     model::{Attachment, Mention, Message, Poll, ReadReceipt, ReplyPreview, Thread},
     style::{Palette, with_alpha},
 };
@@ -1285,7 +1285,11 @@ impl MissiveApp {
                             ObjectFit::Contain
                         } else {
                             ObjectFit::Cover
-                        }),
+                        })
+                        .id(SharedString::from(format!(
+                            "img-frames-{}-{}",
+                            message.id, attachment.id
+                        ))),
                 )
                 .into_any_element(),
             None => frame
@@ -1322,9 +1326,15 @@ impl MissiveApp {
             }
         };
         let (width, height) = fit_image(attachment.width, attachment.height);
-        let opening = self.video_opening(&message.id, &attachment.id);
-        let thumbnail = self.thumb_source(message, attachment);
-        let has_thumbnail = thumbnail.is_some();
+        let key = crate::app::media_key(&message.id, &attachment.id);
+        let gif_failed = matches!(self.gifs.get(&key), Some(GifFrames::Failed))
+            || matches!(self.media.get(&key), Some(Media::Failed));
+        let inline_gif = attachment.gif && crate::gif_video::SUPPORTED && !gif_failed;
+        let animated = self.gif_source(message, attachment);
+        let playing = animated.is_some();
+        let opening = !inline_gif && self.video_opening(&message.id, &attachment.id);
+        let source = animated.or_else(|| self.thumb_source(message, attachment));
+        let has_source = source.is_some();
         div()
             .id(SharedString::from(format!(
                 "video-{}-{}",
@@ -1335,44 +1345,65 @@ impl MissiveApp {
             .h(px(height))
             .rounded(px(18.))
             .overflow_hidden()
-            .bg(if has_thumbnail { p.field_bg } else { hsla(0., 0., 0.12, 1.) })
-            .cursor_pointer()
-            .on_click(open)
-            .when_some(thumbnail, |el, source| {
+            .bg(if has_source { p.field_bg } else { hsla(0., 0., 0.12, 1.) })
+            .when(!inline_gif, |el| el.cursor_pointer().on_click(open))
+            .when_some(source, |el, source| {
                 el.child(
                     img(source)
                         .size_full()
                         .rounded(px(18.))
-                        .object_fit(ObjectFit::Cover),
+                        .object_fit(ObjectFit::Cover)
+                        .id(SharedString::from(format!("video-frames-{key}"))),
                 )
             })
-            .child(
-                div()
-                    .absolute()
-                    .inset_0()
-                    .flex()
-                    .items_center()
-                    .justify_center()
-                    .child(
-                        h_flex()
-                            .h(px(48.))
-                            .min_w(px(48.))
-                            .px(px(if opening { 16. } else { 0. }))
-                            .gap_2()
-                            .rounded_full()
-                            .bg(hsla(0., 0., 0., 0.55))
-                            .justify_center()
-                            .text_color(white())
-                            .child(
-                                Icon::new(if opening { IconName::LoaderCircle } else { IconName::Play })
+            .when(inline_gif && !playing, |el| {
+                el.child(
+                    div()
+                        .absolute()
+                        .inset_0()
+                        .flex()
+                        .items_center()
+                        .justify_center()
+                        .child(
+                            Icon::new(IconName::LoaderCircle)
+                                .size(px(22.))
+                                .text_color(white()),
+                        ),
+                )
+            })
+            .when(!inline_gif, |el| {
+                el.child(
+                    div()
+                        .absolute()
+                        .inset_0()
+                        .flex()
+                        .items_center()
+                        .justify_center()
+                        .child(
+                            h_flex()
+                                .h(px(48.))
+                                .min_w(px(48.))
+                                .px(px(if opening { 16. } else { 0. }))
+                                .gap_2()
+                                .rounded_full()
+                                .bg(hsla(0., 0., 0., 0.55))
+                                .justify_center()
+                                .text_color(white())
+                                .child(
+                                    Icon::new(if opening {
+                                        IconName::LoaderCircle
+                                    } else {
+                                        IconName::Play
+                                    })
                                     .size(px(20.))
                                     .text_color(white()),
-                            )
-                            .when(opening, |el| {
-                                el.child(div().text_size(px(13.)).child("Ouverture…"))
-                            }),
-                    ),
-            )
+                                )
+                                .when(opening, |el| {
+                                    el.child(div().text_size(px(13.)).child("Ouverture…"))
+                                }),
+                        ),
+                )
+            })
             .when_some(
                 if attachment.gif {
                     Some("GIF".to_string())

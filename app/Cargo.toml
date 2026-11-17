@@ -14,6 +14,7 @@ futures = "0.3"
 gpui-kit = "0.10"
 gpui-webview = "=0.10.0"
 hound = "=3.5.1"
+image = { version = "=0.25.10", default-features = false }
 wry = { package = "lb-wry", version = "=0.53.3" }
 raw-window-handle = "0.6"
 reqwest_client = { package = "gpui-pre-reqwest-client", version = "=0.3.12" }
@@ -24,11 +25,14 @@ tray-icon = "=0.26.0"
 velopack = "=1.2.161"
 
 [target.'cfg(windows)'.dependencies]
-windows = { version = "=0.62.2", features = ["Data_Xml_Dom", "Foundation", "Foundation_Collections", "UI_Notifications", "Win32_Foundation", "Win32_Storage_FileSystem", "Win32_System_Com", "Win32_System_Com_StructuredStorage", "Win32_System_Variant", "Win32_UI_Shell", "Win32_UI_Shell_PropertiesSystem", "Win32_UI_WindowsAndMessaging"] }
+windows = { version = "=0.62.2", features = ["Data_Xml_Dom", "Foundation", "Foundation_Collections", "UI_Notifications", "Win32_Foundation", "Win32_Media_MediaFoundation", "Win32_Storage_FileSystem", "Win32_System_Com", "Win32_System_Com_StructuredStorage", "Win32_System_Variant", "Win32_UI_Shell", "Win32_UI_Shell_PropertiesSystem", "Win32_UI_WindowsAndMessaging"] }
 windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_Security", "Win32_Storage_FileSystem", "Win32_System_Console", "Win32_System_Threading", "Win32_UI_WindowsAndMessaging"] }
 winreg = "0.55"
 webview2-com = "=0.38.2"
 webview2-core = { package = "windows-core", version = "=0.61.2" }
+
+[build-dependencies]
+embed-resource = "=3.0.12"
 
 [target.'cfg(not(windows))'.dependencies]
 notify-rust = "=4.18.2"

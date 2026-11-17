@@ -5,6 +5,7 @@ mod audio;
 mod bridge;
 mod desktop;
 mod diagnostics;
+mod gif_video;
 mod logo;
 mod model;
 mod notifications;
@@ -33,6 +34,7 @@ fn main() {
     }
     velopack.run();
     diagnostics::init();
+    diagnostics::wait_for_crashed_instance();
     let Some(instance) = desktop::Instance::acquire() else {
         return;
     };

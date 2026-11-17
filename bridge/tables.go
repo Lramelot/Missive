@@ -880,7 +880,25 @@ func (m lsMedia) convert(id string) (Attachment, mediaRec) {
 	if m.preview != "" && m.preview != att.URL {
 		att.ThumbnailURL = m.preview
 	}
+	if m.isGifVideo() {
+		kind = "video"
+		att.Kind = kind
+		att.Gif = true
+	}
 	return att, mediaRec{Kind: kind, URL: att.URL, MimeType: att.MimeType, FileName: m.fileName, ExpiresMS: expires}
+}
+
+func (m lsMedia) isGifVideo() bool {
+	if m.playable == "" || !strings.HasPrefix(strings.ToLower(firstNonEmpty(m.playableMime, m.attMime)), "video/") {
+		return false
+	}
+	if m.kind == table.AttachmentTypeAnimatedImage {
+		return true
+	}
+	if attachmentKind(m.kind) != "video" {
+		return false
+	}
+	return strings.EqualFold(m.previewMime, "image/gif") || strings.HasSuffix(strings.ToLower(m.fileName), ".gif")
 }
 
 func attachmentKind(t table.AttachmentType) string {

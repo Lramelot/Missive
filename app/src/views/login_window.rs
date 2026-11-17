@@ -281,17 +281,23 @@ impl Render for LoginWindow {
 
 impl MissiveApp {
     pub(crate) fn open_login_window(&mut self, cx: &mut Context<Self>) {
-        let app = cx.entity().downgrade();
-        let options = WindowOptions {
-            window_bounds: Some(WindowBounds::centered(size(px(980.), px(820.)), cx)),
-            window_min_size: Some(size(px(560.), px(600.))),
-            ..TitleBar::window_options()
-        };
-        if let Err(err) = gpui_kit::open_window(options, cx, move |window, cx| {
-            cx.new(|cx| LoginWindow::new(app, window, cx))
-        }) {
-            self.login_error = Some(format!("Fenêtre de connexion impossible : {err:#}").into());
-            cx.notify();
-        }
+        let owner = cx.entity();
+        cx.defer(move |cx| {
+            let app = owner.downgrade();
+            let options = WindowOptions {
+                window_bounds: Some(WindowBounds::centered(size(px(980.), px(820.)), cx)),
+                window_min_size: Some(size(px(560.), px(600.))),
+                ..TitleBar::window_options()
+            };
+            if let Err(err) = gpui_kit::open_window(options, cx, move |window, cx| {
+                cx.new(|cx| LoginWindow::new(app, window, cx))
+            }) {
+                owner.update(cx, |this, cx| {
+                    this.login_error =
+                        Some(format!("Fenêtre de connexion impossible : {err:#}").into());
+                    cx.notify();
+                });
+            }
+        });
     }
 }

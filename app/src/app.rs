@@ -139,6 +139,12 @@ pub(crate) enum Media {
     Failed,
 }
 
+pub(crate) enum GifFrames {
+    Decoding,
+    Ready(ImageSource),
+    Failed,
+}
+
 pub struct MissiveApp {
     pub(crate) bridge: Option<Bridge>,
     pub(crate) screen: Screen,
@@ -181,7 +187,6 @@ pub struct MissiveApp {
     pub(crate) sending: usize,
     pub(crate) settings: Settings,
     pub(crate) settings_open: bool,
-    pub(crate) settings_scroll: ScrollHandle,
     pub(crate) manual_login: bool,
     pub(crate) tray: Option<Tray>,
     pub(crate) instance: crate::desktop::Instance,
@@ -192,6 +197,10 @@ pub struct MissiveApp {
     pub(crate) pending_scroll: Option<(String, String)>,
     pub(crate) popout_active: HashMap<String, bool>,
     pub(crate) media_queue: std::cell::RefCell<Vec<MediaJob>>,
+    pub(crate) gifs: HashMap<String, GifFrames>,
+    pub(crate) gif_order: Vec<String>,
+    pub(crate) gif_queue: std::cell::RefCell<Vec<(String, PathBuf)>>,
+    pub(crate) gif_in_flight: usize,
     pub(crate) media_in_flight: usize,
     pub(crate) outgoing: HashMap<String, Outgoing>,
     pub(crate) outgoing_requests: HashMap<String, OutgoingRequest>,
@@ -350,6 +359,10 @@ impl MissiveApp {
             pending_scroll: None,
             popout_active: HashMap::new(),
             media_queue: std::cell::RefCell::new(Vec::new()),
+            gifs: HashMap::new(),
+            gif_order: Vec::new(),
+            gif_queue: std::cell::RefCell::new(Vec::new()),
+            gif_in_flight: 0,
             media_in_flight: 0,
             outgoing: HashMap::new(),
             outgoing_requests: HashMap::new(),
@@ -373,7 +386,6 @@ impl MissiveApp {
             read_sent: HashMap::new(),
             settings,
             settings_open: false,
-            settings_scroll: ScrollHandle::new(),
             manual_login: false,
             clicks,
             update: None,

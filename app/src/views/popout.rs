@@ -290,16 +290,22 @@ impl MissiveApp {
             return;
         };
         let app = cx.entity();
-        let options = WindowOptions {
-            window_bounds: Some(WindowBounds::centered(size(px(520.), px(720.)), cx)),
-            window_min_size: Some(size(px(380.), px(420.))),
-            ..TitleBar::window_options()
-        };
-        let result = gpui_kit::open_window(options, cx, move |window, cx| {
-            cx.new(|cx| Popout::new(app, thread_id, window, cx))
+        cx.defer(move |cx| {
+            let options = WindowOptions {
+                window_bounds: Some(WindowBounds::centered(size(px(520.), px(720.)), cx)),
+                window_min_size: Some(size(px(380.), px(420.))),
+                ..TitleBar::window_options()
+            };
+            let owner = app.clone();
+            let result = gpui_kit::open_window(options, cx, move |window, cx| {
+                cx.new(|cx| Popout::new(owner, thread_id, window, cx))
+            });
+            if let Err(err) = result {
+                app.update(cx, |this, cx| {
+                    this.set_error(err.context("Fenêtre impossible à ouvrir"));
+                    cx.notify();
+                });
+            }
         });
-        if let Err(err) = result {
-            self.set_error(err.context("Fenêtre impossible à ouvrir"));
-        }
     }
 }
