@@ -502,6 +502,11 @@ func (d *Dispatcher) dispatch(ctx context.Context, req *Request) (any, error) {
 		if res.Items == nil {
 			res.Items = []MediaItem{}
 		}
+		for i := range res.Items {
+			if res.Items[i].Attachment.Waveform == nil {
+				res.Items[i].Attachment.Waveform = []float64{}
+			}
+		}
 		return res, nil
 	case "history_status":
 		if err := decodeParams(req.Params, &struct{}{}); err != nil {

@@ -1,4 +1,12 @@
-use serde::Deserialize;
+use serde::{Deserialize, Deserializer};
+
+fn nullable_vec<'de, D, T>(deserializer: D) -> Result<Vec<T>, D::Error>
+where
+    D: Deserializer<'de>,
+    T: Deserialize<'de>,
+{
+    Ok(Option::<Vec<T>>::deserialize(deserializer)?.unwrap_or_default())
+}
 
 #[derive(Clone, Debug, Deserialize)]
 pub struct User {
@@ -25,13 +33,13 @@ pub struct Thread {
     pub e2ee: bool,
     #[serde(default)]
     pub muted: bool,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "nullable_vec")]
     pub member_avatars: Vec<String>,
     #[serde(default)]
     pub peer_id: Option<String>,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "nullable_vec")]
     pub read_receipts: Vec<ReadReceipt>,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "nullable_vec")]
     pub participants: Vec<Participant>,
     #[serde(default)]
     pub peer_online: Option<bool>,
@@ -47,7 +55,7 @@ pub struct Thread {
     pub quick_emoji: Option<String>,
     #[serde(default)]
     pub ephemeral_ttl_ms: Option<i64>,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "nullable_vec")]
     pub pinned_message_ids: Vec<String>,
     #[serde(default)]
     pub can_manage: bool,
@@ -64,7 +72,7 @@ fn default_folder() -> String {
 #[derive(Clone, Debug, Default, Deserialize)]
 pub struct ThreadTheme {
     pub accent: String,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "nullable_vec")]
     pub gradient: Vec<String>,
 }
 
@@ -86,7 +94,7 @@ pub struct Poll {
     pub id: String,
     #[serde(default)]
     pub question: String,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "nullable_vec")]
     pub options: Vec<PollOption>,
     #[serde(default)]
     pub total_votes: u32,
@@ -99,7 +107,7 @@ pub struct PollOption {
     pub text: String,
     #[serde(default)]
     pub vote_count: u32,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "nullable_vec")]
     pub voters: Vec<Reactor>,
     #[serde(default)]
     pub mine: bool,
@@ -190,6 +198,7 @@ pub struct MediaItem {
 
 #[derive(Clone, Debug, Deserialize)]
 pub struct MediaPage {
+    #[serde(default, deserialize_with = "nullable_vec")]
     pub items: Vec<MediaItem>,
     #[serde(default)]
     pub has_more: bool,
@@ -208,7 +217,7 @@ pub struct Reaction {
     pub count: u32,
     #[serde(default)]
     pub mine: bool,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "nullable_vec")]
     pub reactors: Vec<Reactor>,
 }
 
@@ -238,7 +247,7 @@ pub struct Message {
     pub timestamp_ms: i64,
     #[serde(default)]
     pub is_outgoing: bool,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "nullable_vec")]
     pub attachments: Vec<Attachment>,
     #[serde(default)]
     pub reply_to_id: Option<String>,
@@ -246,13 +255,13 @@ pub struct Message {
     pub reply_to: Option<ReplyPreview>,
     #[serde(default)]
     pub client_id: Option<String>,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "nullable_vec")]
     pub mentions: Vec<Mention>,
     #[serde(default)]
     pub edited: bool,
     #[serde(default)]
     pub deleted: bool,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "nullable_vec")]
     pub reactions: Vec<Reaction>,
     #[serde(default)]
     pub system: bool,
@@ -293,7 +302,7 @@ pub struct Attachment {
     pub voice: bool,
     #[serde(default)]
     pub gif: bool,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "nullable_vec")]
     pub waveform: Vec<f32>,
     #[serde(default)]
     pub latitude: Option<f64>,
@@ -354,6 +363,29 @@ pub struct MediaResult {
 #[derive(Clone, Debug, Deserialize)]
 pub struct BackfillEvent {
     pub thread_id: String,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "nullable_vec")]
     pub messages: Vec<Message>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{MediaPage, Message};
+
+    #[test]
+    fn null_lists_deserialize_as_empty() {
+        let page: MediaPage = serde_json::from_str(
+            r#"{"items":[{"message_id":"m","thread_id":"t","timestamp_ms":1,"attachment":{"kind":"image","waveform":null}}],"has_more":false}"#,
+        )
+        .unwrap();
+        assert!(page.items[0].attachment.waveform.is_empty());
+        let empty: MediaPage = serde_json::from_str(r#"{"items":null}"#).unwrap();
+        assert!(empty.items.is_empty());
+        let message: Message = serde_json::from_str(
+            r#"{"id":"m","thread_id":"t","timestamp_ms":1,"attachments":null,"reactions":null,"mentions":null}"#,
+        )
+        .unwrap();
+        assert!(message.attachments.is_empty() && message.reactions.is_empty());
+        let missing: Message = serde_json::from_str(r#"{"id":"m","thread_id":"t","timestamp_ms":1}"#).unwrap();
+        assert!(missing.mentions.is_empty());
+    }
 }
