@@ -40,6 +40,7 @@ pub fn apply_theme(preference: ThemePreference, window: Option<&mut Window>, cx:
         theme.title_bar_border = palette.canvas;
         theme.radius = px(10.);
         theme.radius_lg = px(14.);
+        theme.scrollbar_mode = gpui_kit::component::scroll::ScrollbarMode::Always;
     });
 }
 

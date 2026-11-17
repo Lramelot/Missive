@@ -352,6 +352,7 @@ impl MissiveApp {
             .items_center()
             .justify_center()
             .bg(hsla(0., 0., 0., 0.4))
+            .occlude()
             .child(
                 v_flex()
                     .id("pin-dialog")

@@ -478,6 +478,7 @@ func waContentMedia(content *waConsumerApplication.ConsumerApplication_Content) 
 			anc := t.GetAncillary()
 			att.Width, att.Height = int(anc.GetWidth()), int(anc.GetHeight())
 			att.DurationMS = int64(anc.GetSeconds()) * 1000
+			att.Gif = anc.GetGifPlayback()
 		}
 		return captionOf(c.VideoMessage), []waAttachment{att}
 	case *waConsumerApplication.ConsumerApplication_Content_AudioMessage:

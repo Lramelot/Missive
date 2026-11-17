@@ -1373,7 +1373,16 @@ impl MissiveApp {
                             }),
                     ),
             )
-            .when_some(attachment.duration_ms.filter(|ms| *ms > 0), |el, ms| {
+            .when_some(
+                if attachment.gif {
+                    Some("GIF".to_string())
+                } else {
+                    attachment
+                        .duration_ms
+                        .filter(|ms| *ms > 0)
+                        .map(format_duration)
+                },
+                |el, badge| {
                 el.child(
                     div()
                         .absolute()
@@ -1385,9 +1394,15 @@ impl MissiveApp {
                         .bg(hsla(0., 0., 0., 0.6))
                         .text_size(px(12.))
                         .text_color(white())
-                        .child(format_duration(ms)),
+                        .font_weight(if attachment.gif {
+                            FontWeight::BOLD
+                        } else {
+                            FontWeight::NORMAL
+                        })
+                        .child(badge),
                 )
-            })
+                },
+            )
             .into_any_element()
     }
 

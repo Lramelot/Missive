@@ -21,15 +21,17 @@ use gpui_kit::*;
 use reqwest_client::ReqwestClient;
 
 fn main() {
-    let velopack = velopack::VelopackApp::build();
+    let mut velopack = velopack::VelopackApp::build();
     #[cfg(windows)]
-    let velopack = velopack.set_app_user_model_id(notifications::APP_ID);
-    velopack
-        .on_before_uninstall_fast_callback(|_| {
-            let _ = desktop::set_launch_at_login(false);
-            notifications::unregister();
-        })
-        .run();
+    {
+        velopack = velopack
+            .set_app_user_model_id(notifications::APP_ID)
+            .on_before_uninstall_fast_callback(|_| {
+                let _ = desktop::set_launch_at_login(false);
+                notifications::unregister();
+            });
+    }
+    velopack.run();
     diagnostics::init();
     let Some(instance) = desktop::Instance::acquire() else {
         return;

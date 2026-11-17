@@ -292,6 +292,8 @@ pub struct Attachment {
     #[serde(default)]
     pub voice: bool,
     #[serde(default)]
+    pub gif: bool,
+    #[serde(default)]
     pub waveform: Vec<f32>,
     #[serde(default)]
     pub latitude: Option<f64>,

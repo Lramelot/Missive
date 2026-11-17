@@ -181,6 +181,7 @@ pub struct MissiveApp {
     pub(crate) sending: usize,
     pub(crate) settings: Settings,
     pub(crate) settings_open: bool,
+    pub(crate) settings_scroll: ScrollHandle,
     pub(crate) manual_login: bool,
     pub(crate) tray: Option<Tray>,
     pub(crate) instance: crate::desktop::Instance,
@@ -372,6 +373,7 @@ impl MissiveApp {
             read_sent: HashMap::new(),
             settings,
             settings_open: false,
+            settings_scroll: ScrollHandle::new(),
             manual_login: false,
             clicks,
             update: None,
@@ -1464,6 +1466,7 @@ pub(crate) fn preview(message: &Message) -> String {
 pub(crate) fn describe_attachments(message: &Message) -> String {
     match message.attachments.first().map(|a| a.kind.as_str()) {
         Some("image") => "Photo".into(),
+        Some("video") if message.attachments[0].gif => "GIF".into(),
         Some("video") => "Vidéo".into(),
         Some("audio") => "Message vocal".into(),
         Some("sticker") => "Sticker".into(),

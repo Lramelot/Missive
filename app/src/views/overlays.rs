@@ -38,6 +38,7 @@ fn scrim() -> Div {
         .items_center()
         .justify_center()
         .bg(hsla(0., 0., 0., 0.45))
+        .occlude()
 }
 
 fn month_label(timestamp_ms: i64) -> String {
@@ -659,6 +660,7 @@ impl MissiveApp {
             .absolute()
             .inset_0()
             .bg(hsla(0., 0., 0.04, 0.94))
+            .occlude()
             .flex()
             .flex_col()
             .cursor_pointer()

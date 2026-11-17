@@ -4,6 +4,7 @@ use gpui_kit::component::{
     button::{Button, ButtonVariants as _},
     h_flex,
     input::{Input, InputEvent, InputState, Textarea, TextareaState},
+    scroll::ScrollableElement as _,
     switch::Switch,
     v_flex,
 };
@@ -1057,6 +1058,7 @@ impl MissiveApp {
             .items_center()
             .justify_center()
             .bg(hsla(0., 0., 0., 0.4))
+            .occlude()
             .child(
                 v_flex()
                     .id("settings")
@@ -1068,6 +1070,8 @@ impl MissiveApp {
                     .bg(p.panel)
                     .shadow_lg()
                     .overflow_y_scroll()
+                    .track_scroll(&self.settings_scroll)
+                    .vertical_scrollbar(&self.settings_scroll)
                     .px_7()
                     .pt_6()
                     .pb_7()

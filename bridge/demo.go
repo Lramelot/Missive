@@ -649,6 +649,7 @@ func (d *DemoBackend) generateOlder(threadID string, e2ee bool, want int) {
 			msg.Attachments = []Attachment{{ID: "img_0", Kind: kind, FileName: "IMG_" + strconv.Itoa(1000+d.rng.IntN(9000)) + ".png", MimeType: "image/png", Width: size[0], Height: size[1], Size: int64(size[0] * size[1] / 3)}}
 			if kind == "video" {
 				msg.Attachments[0].DurationMS = int64(3+d.rng.IntN(60)) * 1000
+				msg.Attachments[0].Gif = d.rng.IntN(2) == 0
 			}
 		}
 		d.store.PutMessage(msg)

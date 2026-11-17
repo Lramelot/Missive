@@ -236,6 +236,7 @@ type Attachment struct {
 	Width        int       `json:"width,omitempty"`
 	Height       int       `json:"height,omitempty"`
 	Voice        bool      `json:"voice"`
+	Gif          bool      `json:"gif,omitempty"`
 	Waveform     []float64 `json:"waveform"`
 	Latitude     *float64  `json:"latitude,omitempty"`
 	Longitude    *float64  `json:"longitude,omitempty"`

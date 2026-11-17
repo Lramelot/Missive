@@ -287,6 +287,7 @@ Attachment {
   width?: int,
   height?: int,
   voice: bool,             // audio recorded as a voice message (LS voice clip / E2EE PTT)
+  gif?: bool,              // video: an animated GIF Meta delivers as a looping MP4 (E2EE gif_playback)
   waveform: float[],       // voice: amplitude samples in 0..1 when Meta provides them, [] otherwise
   latitude?: float,
   longitude?: float
