@@ -21,8 +21,10 @@ use gpui_kit::*;
 use reqwest_client::ReqwestClient;
 
 fn main() {
-    velopack::VelopackApp::build()
-        .set_app_user_model_id(notifications::APP_ID)
+    let velopack = velopack::VelopackApp::build();
+    #[cfg(windows)]
+    let velopack = velopack.set_app_user_model_id(notifications::APP_ID);
+    velopack
         .on_before_uninstall_fast_callback(|_| {
             let _ = desktop::set_launch_at_login(false);
             notifications::unregister();

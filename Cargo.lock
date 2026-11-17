@@ -4544,7 +4544,7 @@ dependencies = [
 
 [[package]]
 name = "missive"
-version = "0.1.0"
+version = "0.1.11"
 dependencies = [
  "anyhow",
  "chrono",
@@ -4564,7 +4564,9 @@ dependencies = [
  "serde_json",
  "tray-icon",
  "velopack",
+ "webview2-com",
  "windows 0.62.2",
+ "windows-core 0.61.2",
  "windows-sys 0.61.2",
  "winreg 0.55.0",
 ]

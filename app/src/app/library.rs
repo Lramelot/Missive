@@ -1292,6 +1292,64 @@ impl MissiveApp {
         self.with_lightbox_file(cx, |_, path, cx| crate::desktop::open_local(&path, cx));
     }
 
+    pub(crate) fn video_opening(&self, message_id: &str, attachment_id: &str) -> bool {
+        matches!(
+            self.media.get(&super::media_key(message_id, attachment_id)),
+            Some(Media::Loading)
+        )
+    }
+
+    pub(crate) fn open_video(
+        &mut self,
+        message: &Message,
+        attachment: &crate::model::Attachment,
+        cx: &mut Context<Self>,
+    ) {
+        let key = super::media_key(&message.id, &attachment.id);
+        match self.media.get(&key) {
+            Some(Media::Ready(path)) => {
+                let path = path.clone();
+                crate::desktop::open_local(&path, cx);
+                return;
+            }
+            Some(Media::Loading) => return,
+            _ => {}
+        }
+        if attachment.id.is_empty() || message.id.starts_with("local-") {
+            if let Some(url) = attachment.url.as_deref() {
+                crate::desktop::open_web(url, cx);
+            }
+            return;
+        }
+        let Some(bridge) = self.bridge() else { return };
+        self.media.insert(key.clone(), Media::Loading);
+        cx.notify();
+        let params = json!({
+            "thread_id": message.thread_id,
+            "message_id": message.id,
+            "attachment_id": attachment.id,
+        });
+        cx.spawn(async move |this, cx| {
+            let result = bridge.call::<MediaResult>("media", params).await;
+            let _ = this.update(cx, |this, cx| {
+                match result {
+                    Ok(media) => {
+                        let path = PathBuf::from(media.path);
+                        this.media.insert(key, Media::Ready(path.clone()));
+                        crate::desktop::open_local(&path, cx);
+                    }
+                    Err(err) => {
+                        eprintln!("[app] video download failed: {err:#}");
+                        this.media.remove(&key);
+                        this.show_toast("Impossible d'ouvrir cette vidéo", cx);
+                    }
+                }
+                cx.notify();
+            });
+        })
+        .detach();
+    }
+
     pub(crate) fn thread_images(
         &self,
         thread_id: &str,

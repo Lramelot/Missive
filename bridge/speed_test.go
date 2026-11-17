@@ -61,6 +61,23 @@ func encodedImage(t *testing.T, w, h int, asJPEG bool) []byte {
 	return buf.Bytes()
 }
 
+func noisyPNG(t *testing.T, w, h int) []byte {
+	t.Helper()
+	img := image.NewNRGBA(image.Rect(0, 0, w, h))
+	state := uint32(2463534242)
+	for i := 0; i < len(img.Pix); i += 4 {
+		state ^= state << 13
+		state ^= state >> 17
+		state ^= state << 5
+		img.Pix[i], img.Pix[i+1], img.Pix[i+2], img.Pix[i+3] = uint8(state), uint8(state>>8), uint8(state>>16), 255
+	}
+	var buf bytes.Buffer
+	if err := png.Encode(&buf, img); err != nil {
+		t.Fatal(err)
+	}
+	return buf.Bytes()
+}
+
 func TestSpeedMessagesAreCacheFirst(t *testing.T) {
 	b, buf, _ := loggedInBackend(t)
 	b.store.UpdateThread("5", func(rec *threadRec) { rec.IsGroup = true })
@@ -334,7 +351,7 @@ func inlineTransport(t *testing.T, thumb []byte) []byte {
 
 func TestSpeedThumbSourcePriority(t *testing.T) {
 	var thumbHits, fullHits atomic.Int32
-	big := encodedImage(t, 1600, 1200, false)
+	big := noisyPNG(t, 1600, 1200)
 	small := encodedImage(t, 200, 150, true)
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {

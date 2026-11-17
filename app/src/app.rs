@@ -249,6 +249,7 @@ impl MissiveApp {
         let pin_input = cx.new(|cx| {
             InputState::new(window, cx)
                 .masked(true)
+                .validate(|text, _| text.len() <= 6 && text.chars().all(|c| c.is_ascii_digit()))
                 .placeholder("PIN à 6 chiffres")
         });
 

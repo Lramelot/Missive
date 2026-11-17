@@ -906,6 +906,7 @@ impl MissiveApp {
     ) -> AnyElement {
         match attachment.kind.as_str() {
             "image" | "sticker" => self.render_image(message, attachment, view, p),
+            "video" => self.render_video(message, attachment, view, p),
             "link" => self.render_link(message, attachment, row, find, p),
             "audio" => self
                 .render_voice_attachment(message, attachment, row.outgoing, view, p, cx)
@@ -1303,6 +1304,91 @@ impl MissiveApp {
                 })
                 .into_any_element(),
         }
+    }
+
+    fn render_video(
+        &self,
+        message: &Message,
+        attachment: &Attachment,
+        view: &Entity<Self>,
+        p: &Palette,
+    ) -> AnyElement {
+        let open = {
+            let view = view.clone();
+            let message = message.clone();
+            let attachment = attachment.clone();
+            move |_: &ClickEvent, _: &mut Window, cx: &mut App| {
+                view.update(cx, |this, cx| this.open_video(&message, &attachment, cx));
+            }
+        };
+        let (width, height) = fit_image(attachment.width, attachment.height);
+        let opening = self.video_opening(&message.id, &attachment.id);
+        let thumbnail = self.thumb_source(message, attachment);
+        let has_thumbnail = thumbnail.is_some();
+        div()
+            .id(SharedString::from(format!(
+                "video-{}-{}",
+                message.id, attachment.id
+            )))
+            .relative()
+            .w(px(width))
+            .h(px(height))
+            .rounded(px(18.))
+            .overflow_hidden()
+            .bg(if has_thumbnail { p.field_bg } else { hsla(0., 0., 0.12, 1.) })
+            .cursor_pointer()
+            .on_click(open)
+            .when_some(thumbnail, |el, source| {
+                el.child(
+                    img(source)
+                        .size_full()
+                        .rounded(px(18.))
+                        .object_fit(ObjectFit::Cover),
+                )
+            })
+            .child(
+                div()
+                    .absolute()
+                    .inset_0()
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .child(
+                        h_flex()
+                            .h(px(48.))
+                            .min_w(px(48.))
+                            .px(px(if opening { 16. } else { 0. }))
+                            .gap_2()
+                            .rounded_full()
+                            .bg(hsla(0., 0., 0., 0.55))
+                            .justify_center()
+                            .text_color(white())
+                            .child(
+                                Icon::new(if opening { IconName::LoaderCircle } else { IconName::Play })
+                                    .size(px(20.))
+                                    .text_color(white()),
+                            )
+                            .when(opening, |el| {
+                                el.child(div().text_size(px(13.)).child("Ouverture…"))
+                            }),
+                    ),
+            )
+            .when_some(attachment.duration_ms.filter(|ms| *ms > 0), |el, ms| {
+                el.child(
+                    div()
+                        .absolute()
+                        .right(px(10.))
+                        .bottom(px(10.))
+                        .px_2()
+                        .py_0p5()
+                        .rounded(px(8.))
+                        .bg(hsla(0., 0., 0., 0.6))
+                        .text_size(px(12.))
+                        .text_color(white())
+                        .child(format_duration(ms)),
+                )
+            })
+            .into_any_element()
     }
 
     fn render_link(
