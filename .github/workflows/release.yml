@@ -1,0 +1,102 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+env:
+  VPK_VERSION: "1.2.161"
+  MISSIVE_UPDATE_URL: https://github.com/${{ github.repository }}
+  MISSIVE_UPDATE_REPO: ${{ github.repository }}
+  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: bridge/go.mod
+          cache-dependency-path: bridge/go.sum
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+      - name: Resolve version
+        id: version
+        shell: bash
+        run: |
+          crate="$(awk '/^\[workspace\.package\]/{f=1;next} /^\[/{f=0} f && /^version[[:space:]]*=/{gsub(/.*=[[:space:]]*"|".*/,"");print;exit}' Cargo.toml)"
+          if [ "v$crate" != "$GITHUB_REF_NAME" ]; then
+            echo "Tag $GITHUB_REF_NAME does not match Cargo.toml version $crate" >&2
+            exit 1
+          fi
+          echo "version=$crate" >> "$GITHUB_OUTPUT"
+      - name: Install vpk
+        run: dotnet tool install -g vpk --version $env:VPK_VERSION
+      - name: Download previous release and pack
+        shell: pwsh
+        run: ./packaging/build-windows.ps1
+      - name: Check output
+        shell: bash
+        run: ls target/packaging/windows/releases
+      - name: Upload to GitHub release
+        shell: bash
+        run: >
+          vpk upload github
+          --repoUrl "https://github.com/${{ github.repository }}"
+          --token "$GITHUB_TOKEN"
+          --publish
+          --releaseName "Missive ${{ steps.version.outputs.version }}"
+          --tag "${{ github.ref_name }}"
+          --channel win
+          --outputDir target/packaging/windows/releases
+          --merge
+
+  macos:
+    needs: windows
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: bridge/go.mod
+          cache-dependency-path: bridge/go.sum
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin,x86_64-apple-darwin
+      - uses: Swatinem/rust-cache@v2
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+      - name: Resolve version
+        id: version
+        run: |
+          crate="$(awk '/^\[workspace\.package\]/{f=1;next} /^\[/{f=0} f && /^version[[:space:]]*=/{gsub(/.*=[[:space:]]*"|".*/,"");print;exit}' Cargo.toml)"
+          echo "version=$crate" >> "$GITHUB_OUTPUT"
+      - name: Install vpk
+        run: dotnet tool install -g vpk --version "$VPK_VERSION"
+      - name: Download previous release and pack
+        run: |
+          export PATH="$PATH:$HOME/.dotnet/tools"
+          bash packaging/build-macos.sh
+      - name: Check output
+        run: ls target/packaging/macos/releases
+      - name: Upload to GitHub release
+        run: |
+          export PATH="$PATH:$HOME/.dotnet/tools"
+          vpk upload github \
+            --repoUrl "https://github.com/${{ github.repository }}" \
+            --token "$GITHUB_TOKEN" \
+            --publish \
+            --releaseName "Missive ${{ steps.version.outputs.version }}" \
+            --tag "${{ github.ref_name }}" \
+            --channel osx \
+            --outputDir target/packaging/macos/releases \
+            --merge
