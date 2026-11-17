@@ -4,6 +4,11 @@ on:
   push:
     tags:
       - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag existant dont il faut (re)publier le paquet macOS, par exemple v0.1.18"
+        required: true
 
 permissions:
   contents: write
@@ -16,6 +21,7 @@ env:
 
 jobs:
   windows:
+    if: github.event_name == 'push'
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v5
@@ -61,9 +67,14 @@ jobs:
 
   macos:
     needs: windows
-    runs-on: macos-latest
+    if: ${{ !cancelled() && (needs.windows.result == 'success' || github.event_name == 'workflow_dispatch') }}
+    runs-on: macos-15-intel
+    env:
+      RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
     steps:
       - uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.tag || github.ref_name }}
       - uses: actions/setup-go@v6
         with:
           go-version-file: bridge/go.mod
@@ -79,6 +90,10 @@ jobs:
         id: version
         run: |
           crate="$(awk '/^\[workspace\.package\]/{f=1;next} /^\[/{f=0} f && /^version[[:space:]]*=/{gsub(/.*=[[:space:]]*"|".*/,"");print;exit}' Cargo.toml)"
+          if [ "v$crate" != "$RELEASE_TAG" ]; then
+            echo "Tag $RELEASE_TAG does not match Cargo.toml version $crate" >&2
+            exit 1
+          fi
           echo "version=$crate" >> "$GITHUB_OUTPUT"
       - name: Install vpk
         run: dotnet tool install -g vpk --version "$VPK_VERSION"
@@ -96,7 +111,7 @@ jobs:
             --token "$GITHUB_TOKEN" \
             --publish \
             --releaseName "Missive ${{ steps.version.outputs.version }}" \
-            --tag "${{ github.ref_name }}" \
+            --tag "$RELEASE_TAG" \
             --channel osx \
             --outputDir target/packaging/macos/releases \
             --merge
