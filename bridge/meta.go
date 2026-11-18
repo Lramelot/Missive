@@ -104,6 +104,8 @@ type MetaBackend struct {
 	backfills         sync.Map
 	backfillSem       chan struct{}
 	olderPageFn       func(ctx context.Context, rec threadRec, beforeMS int64, count int) bool
+	latestPageFn      func(ctx context.Context, rec threadRec) bool
+	catchUps          sync.Map
 	waThumbFn         func(ctx context.Context, ref waThumbRef) ([]byte, error)
 	appStateFn        func(task *socket.ReportAppStateTask)
 	taskFn            func(ctx context.Context, tasks ...socket.Task) (*table.LSTable, error)
@@ -853,7 +855,54 @@ func (b *MetaBackend) Messages(ctx context.Context, threadID string, beforeMS in
 	if len(msgs) < limit && fetchMissing {
 		b.startBackfill(rec, beforeMS, limit-len(msgs))
 	}
+	if beforeMS == 0 && len(msgs) > 0 {
+		b.refreshSnippet(msgs[len(msgs)-1])
+	}
+	if beforeMS == 0 && fetchMissing && b.needsCatchUp(rec) {
+		b.startCatchUp(rec)
+	}
 	return msgs, nil
+}
+
+func (b *MetaBackend) refreshSnippet(newest Message) {
+	changed := false
+	b.store.UpdateThread(newest.ThreadID, func(rec *threadRec) {
+		before := rec.Snippet
+		applySnippet(rec, newest, newest.TimestampMS)
+		changed = rec.Snippet != before
+	})
+	if !changed {
+		return
+	}
+	if view, ok := b.store.ThreadView(newest.ThreadID); ok {
+		b.out.Emit(EventThreads, ThreadsEvent{Threads: []Thread{view}})
+	}
+}
+
+func (b *MetaBackend) fetchLatestPage(ctx context.Context, rec threadRec) bool {
+	if rec.E2EE {
+		if !b.historyEnrolled() {
+			return false
+		}
+		_, svc, err := b.historyClient()
+		if err != nil {
+			return false
+		}
+		_, err = b.fetchHistoryPage(ctx, svc, rec, time.Now().Add(historyFutureSlack).UnixMilli(), historyPageSize)
+		return err == nil
+	}
+	key, err := parseThreadKey(rec.ID)
+	if err != nil {
+		return false
+	}
+	b.mu.Lock()
+	client := b.client
+	connected := b.connState == StateConnected
+	b.mu.Unlock()
+	if client == nil || !connected {
+		return false
+	}
+	return b.requestHistory(ctx, client, rec.ID, &socket.CreateThreadTask{ThreadFBID: key, SyncGroup: 1})
 }
 
 func (b *MetaBackend) fetchOlderPage(ctx context.Context, rec threadRec, beforeMS int64, count int) bool {
@@ -940,6 +989,10 @@ func (b *MetaBackend) fetchHistory(ctx context.Context, client *messagix.Client,
 	} else {
 		task = &socket.CreateThreadTask{ThreadFBID: key, SyncGroup: 1}
 	}
+	return b.requestHistory(ctx, client, threadID, task)
+}
+
+func (b *MetaBackend) requestHistory(ctx context.Context, client *messagix.Client, threadID string, task socket.Task) bool {
 	waiter := b.addFetchWaiter(threadID)
 	defer b.removeFetchWaiter(threadID, waiter)
 	tbl, err := client.ExecuteTasks(ctx, task)
@@ -1120,17 +1173,24 @@ func (b *MetaBackend) recordNewMessage(msg Message, live bool) {
 	}
 }
 
+func applySnippet(rec *threadRec, msg Message, latest int64) {
+	rec.LastActivityMS = max(rec.LastActivityMS, msg.TimestampMS)
+	if msg.TimestampMS < latest || msg.TimestampMS < rec.SnippetMS {
+		return
+	}
+	if s := snippetFor(msg); s != "" {
+		rec.Snippet = s
+		rec.SnippetMS = msg.TimestampMS
+	}
+}
+
 func (b *MetaBackend) applyHistoryToThread(msg Message) {
 	if !b.store.HasThread(msg.ThreadID) {
 		return
 	}
+	latest := b.store.LatestTimestamp(msg.ThreadID)
 	b.store.UpdateThread(msg.ThreadID, func(rec *threadRec) {
-		if msg.TimestampMS >= rec.LastActivityMS {
-			rec.LastActivityMS = msg.TimestampMS
-			if s := snippetFor(msg); s != "" {
-				rec.Snippet = s
-			}
-		}
+		applySnippet(rec, msg, latest)
 		if msg.IsOutgoing {
 			rec.LastReadMS = max(rec.LastReadMS, msg.TimestampMS)
 			if rec.LastReadMS >= rec.LastActivityMS {
@@ -1144,13 +1204,9 @@ func (b *MetaBackend) applyMessageToThread(msg Message) {
 	if !b.store.HasThread(msg.ThreadID) {
 		return
 	}
+	latest := b.store.LatestTimestamp(msg.ThreadID)
 	b.store.UpdateThread(msg.ThreadID, func(rec *threadRec) {
-		if msg.TimestampMS >= rec.LastActivityMS {
-			rec.LastActivityMS = msg.TimestampMS
-			if s := snippetFor(msg); s != "" {
-				rec.Snippet = s
-			}
-		}
+		applySnippet(rec, msg, latest)
 		if msg.IsOutgoing {
 			rec.UnreadCount = 0
 			rec.LastReadMS = max(rec.LastReadMS, msg.TimestampMS)

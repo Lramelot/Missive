@@ -206,6 +206,9 @@ func (tc *tableContext) applyThread(f threadFields) {
 		}
 		if f.snippet != "" && ((fresh && !legacy) || rec.Snippet == "") {
 			rec.Snippet = f.snippet
+			if fresh && !legacy {
+				rec.SnippetMS = max(rec.SnippetMS, f.lastActivity)
+			}
 		}
 		rec.LastActivityMS = max(rec.LastActivityMS, f.lastActivity)
 		rec.LastReadMS = max(rec.LastReadMS, f.lastRead)

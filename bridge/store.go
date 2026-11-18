@@ -22,6 +22,7 @@ type threadRec struct {
 	AvatarURL       string          `json:"avatar_url,omitempty"`
 	Snippet         string          `json:"snippet,omitempty"`
 	LastActivityMS  int64           `json:"last_activity_ms,omitempty"`
+	SnippetMS       int64           `json:"snippet_ms,omitempty"`
 	LastReadMS      int64           `json:"last_read_ms,omitempty"`
 	MetaReadMS      int64           `json:"meta_read_ms,omitempty"`
 	MarkedReadMS    int64           `json:"marked_read_ms,omitempty"`

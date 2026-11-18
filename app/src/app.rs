@@ -896,14 +896,40 @@ impl MissiveApp {
         };
         let known: std::collections::HashSet<String> = list.iter().map(|m| m.id.clone()).collect();
         let oldest = list.first().map(|m| m.timestamp_ms).unwrap_or(i64::MAX);
-        let mut older: Vec<Message> = backfill
+        let (mut older, mut newer): (Vec<Message>, Vec<Message>) = backfill
             .messages
             .into_iter()
-            .filter(|m| !known.contains(&m.id) && m.timestamp_ms <= oldest)
-            .collect();
+            .filter(|m| !known.contains(&m.id))
+            .partition(|m| m.timestamp_ms <= oldest);
+        if !newer.is_empty() {
+            newer.sort_by_key(|m| m.timestamp_ms);
+            let newest = newer.last().cloned();
+            for message in newer {
+                self.insert_message_sorted(message, is_selected, cx);
+            }
+            let is_last = newest.as_ref().is_some_and(|newest| {
+                self.messages
+                    .get(&thread_id)
+                    .and_then(|list| list.last())
+                    .is_some_and(|last| last.id == newest.id)
+            });
+            if let (true, Some(newest)) = (is_last, newest) {
+                if let Some(thread) = self.threads.iter_mut().find(|t| t.id == thread_id) {
+                    thread.snippet = preview(&newest);
+                    thread.last_activity_ms = thread.last_activity_ms.max(newest.timestamp_ms);
+                }
+                self.sort_threads();
+            }
+            if self.is_thread_in_view(&thread_id, is_selected) {
+                self.auto_mark_read(&thread_id, cx);
+            }
+        }
         if older.is_empty() {
             return;
         }
+        let Some(list) = self.messages.get_mut(&thread_id) else {
+            return;
+        };
         older.sort_by_key(|m| m.timestamp_ms);
         let count = older.len();
         older.extend(list.drain(..));
@@ -950,15 +976,23 @@ impl MissiveApp {
                 .push(message);
             return;
         }
-        if !self.messages.contains_key(&message.thread_id) {
-            return;
-        }
         let message_thread = message.thread_id.clone();
+        if self.insert_message_sorted(message, is_selected, cx) && in_view {
+            self.auto_mark_read(&message_thread, cx);
+        }
+    }
+
+    fn insert_message_sorted(
+        &mut self,
+        message: Message,
+        is_selected: bool,
+        cx: &mut Context<Self>,
+    ) -> bool {
         let Some(list) = self.messages.get_mut(&message.thread_id) else {
-            return;
+            return false;
         };
         if list.iter().any(|existing| existing.id == message.id) {
-            return;
+            return false;
         }
         let position =
             list.partition_point(|existing| existing.timestamp_ms <= message.timestamp_ms);
@@ -976,9 +1010,7 @@ impl MissiveApp {
                 }
             });
         }
-        if in_view {
-            self.auto_mark_read(&message_thread, cx);
-        }
+        true
     }
 
     fn load_history_status(&mut self, cx: &mut Context<Self>) {
