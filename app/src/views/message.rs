@@ -75,7 +75,7 @@ pub(super) fn delivery_label(
     local: bool,
 ) -> String {
     if local {
-        return "Envoyé".into();
+        return t!("message.delivery.sent").into_owned();
     }
     let seen = receipts
         .iter()
@@ -83,11 +83,11 @@ pub(super) fn delivery_label(
         .count();
     if seen > 0 {
         return if !is_group {
-            "Vu".into()
+            t!("message.delivery.seen").into_owned()
         } else if members > 0 && seen >= members {
-            "Vu par tout le monde".into()
+            t!("message.delivery.seen_by_everyone").into_owned()
         } else {
-            format!("Vu par {seen}")
+            t!("message.delivery.seen_by_count", count = seen).into_owned()
         };
     }
     let delivered = receipts.iter().any(|receipt| {
@@ -96,9 +96,9 @@ pub(super) fn delivery_label(
             .is_some_and(|delivered| delivered >= timestamp_ms)
     });
     if delivered {
-        "Distribué".into()
+        t!("message.delivery.delivered").into_owned()
     } else {
-        "Envoyé".into()
+        t!("message.delivery.sent").into_owned()
     }
 }
 
@@ -145,13 +145,13 @@ fn outgoing_status(
         return row
             .text_color(p.text_faint)
             .child(Icon::new(IconName::Clock).size(px(13.)))
-            .child("En attente de connexion")
+            .child(ts!("message.status.waiting_for_connection"))
             .child(
                 div()
                     .id(SharedString::from(format!("discard-{client_id}")))
                     .cursor_pointer()
                     .hover(|style| style.underline())
-                    .child("Annuler")
+                    .child(ts!("message.status.cancel"))
                     .on_click(move |_, _, cx| {
                         let id = discard_id.clone();
                         discard_view.update(cx, |this, cx| this.discard_outgoing(id, cx));
@@ -162,7 +162,7 @@ fn outgoing_status(
     match state {
         Outgoing::Sending => row
             .text_color(p.text_faint)
-            .child("Envoi…")
+            .child(ts!("message.status.sending"))
             .into_any_element(),
         Outgoing::Failed(label) => {
             let retry_view = view.clone();
@@ -176,7 +176,7 @@ fn outgoing_status(
                         .id(SharedString::from(format!("retry-{client_id}")))
                         .font_weight(FontWeight::SEMIBOLD)
                         .cursor_pointer()
-                        .child("Réessayer")
+                        .child(ts!("message.status.retry"))
                         .on_click(move |_, _, cx| {
                             let id = retry_id.clone();
                             retry_view.update(cx, |this, cx| this.retry_outgoing(id, cx));
@@ -187,7 +187,7 @@ fn outgoing_status(
                         .id(SharedString::from(format!("discard-{client_id}")))
                         .text_color(p.text_faint)
                         .cursor_pointer()
-                        .child("Annuler")
+                        .child(ts!("message.status.cancel"))
                         .on_click(move |_, _, cx| {
                             let id = discard_id.clone();
                             discard_view.update(cx, |this, cx| this.discard_outgoing(id, cx));
@@ -224,21 +224,21 @@ fn reply_quote(
         quoted.text.split_whitespace().collect::<Vec<_>>().join(" ")
     } else {
         match quoted.kind.as_deref() {
-            Some("image") => "Photo".into(),
-            Some("video") => "Vidéo".into(),
-            Some("audio") => "Message vocal".into(),
-            Some("link") => "Lien".into(),
-            Some("location") => "Position".into(),
-            Some(_) => "Pièce jointe".into(),
-            None => "Message".into(),
+            Some("image") => t!("message.quote.photo").into_owned(),
+            Some("video") => t!("message.quote.video").into_owned(),
+            Some("audio") => t!("message.quote.voice").into_owned(),
+            Some("link") => t!("message.quote.link").into_owned(),
+            Some("location") => t!("message.quote.location").into_owned(),
+            Some(_) => t!("message.quote.attachment").into_owned(),
+            None => t!("message.quote.message").into_owned(),
         }
     };
-    let name = if quoted.sender_name.is_empty() {
-        "Réponse"
+    let name: String = if quoted.sender_name.is_empty() {
+        t!("message.quote.reply").into_owned()
     } else if me_name == Some(quoted.sender_name.as_str()) {
-        "Vous"
+        t!("message.quote.you").into_owned()
     } else {
-        quoted.sender_name.as_str()
+        quoted.sender_name.clone()
     };
     let display = format!("{name}  {body}");
     let highlight = HighlightStyle {
@@ -280,7 +280,7 @@ fn forwarded_label(p: &Palette) -> impl IntoElement {
         .text_size(px(11.5))
         .text_color(p.text_faint)
         .child(Icon::new(IconName::Forward).size(px(12.)))
-        .child("Transféré")
+        .child(ts!("message.forwarded"))
 }
 
 fn date_separator(timestamp_ms: i64, compact: bool, p: &Palette) -> impl IntoElement {
@@ -779,7 +779,7 @@ impl MissiveApp {
                     .border_color(p.divider)
                     .text_color(p.text_faint)
                     .italic()
-                    .child("Message retiré")
+                    .child(ts!("message.removed"))
                     .into_any_element(),
             );
             return parts;
@@ -846,7 +846,7 @@ impl MissiveApp {
                             div()
                                 .text_size(scaled(11., row.scale))
                                 .opacity(0.7)
-                                .child("modifié"),
+                                .child(ts!("message.edited")),
                         )
                     });
                 let quote = quote_pending.take().map(|quoted| {
@@ -887,7 +887,7 @@ impl MissiveApp {
                     .bg(p.bubble_in)
                     .text_color(p.text_muted)
                     .italic()
-                    .child("Message non pris en charge")
+                    .child(ts!("message.unsupported"))
                     .into_any_element(),
             );
         }
@@ -946,7 +946,7 @@ impl MissiveApp {
             .title
             .clone()
             .filter(|t| !t.is_empty())
-            .unwrap_or_else(|| "Position".into());
+            .unwrap_or_else(|| t!("message.attachment.location").into_owned());
         let thumbnail = self.card_thumbnail(message, attachment);
         let hover = p.hover;
         v_flex()
@@ -1034,7 +1034,7 @@ impl MissiveApp {
             .title
             .clone()
             .filter(|t| !t.is_empty())
-            .unwrap_or_else(|| "Story".into());
+            .unwrap_or_else(|| t!("message.attachment.story").into_owned());
         let thumbnail = self.card_thumbnail(message, attachment);
         let hover = p.hover;
         v_flex()
@@ -1202,9 +1202,8 @@ impl MissiveApp {
             );
         }
         let footer = match poll.total_votes {
-            0 => "Aucun vote".to_string(),
-            1 => "1 vote".to_string(),
-            n => format!("{n} votes"),
+            0 => t!("message.poll.no_votes").into_owned(),
+            n => tn!("message.poll.votes", n).into_owned(),
         };
         v_flex()
             .w(px(350.))
@@ -1299,7 +1298,9 @@ impl MissiveApp {
                 .text_size(px(12.))
                 .text_color(p.text_faint)
                 .child(if failed {
-                    div().child("Image indisponible").into_any_element()
+                    div()
+                        .child(ts!("message.image_unavailable"))
+                        .into_any_element()
                 } else {
                     Icon::new(IconName::Image)
                         .size(px(26.))
@@ -1399,7 +1400,11 @@ impl MissiveApp {
                                     .text_color(white()),
                                 )
                                 .when(opening, |el| {
-                                    el.child(div().text_size(px(13.)).child("Ouverture…"))
+                                    el.child(
+                                        div()
+                                            .text_size(px(13.))
+                                            .child(ts!("message.video_opening")),
+                                    )
                                 }),
                         ),
                 )
@@ -1554,12 +1559,14 @@ fn render_chip(
     };
     let label = match attachment.kind.as_str() {
         "audio" => match attachment.duration_ms {
-            Some(ms) => format!("Message vocal · {}", format_duration(ms)),
-            None => "Message vocal".into(),
+            Some(ms) => t!("message.chip.voice_with_duration", duration = format_duration(ms))
+                .into_owned(),
+            None => t!("message.chip.voice").into_owned(),
         },
         "video" => match attachment.duration_ms {
-            Some(ms) => format!("Vidéo · {}", format_duration(ms)),
-            None => "Vidéo".into(),
+            Some(ms) => t!("message.chip.video_with_duration", duration = format_duration(ms))
+                .into_owned(),
+            None => t!("message.chip.video").into_owned(),
         },
         "file" => attachment
             .file_name
@@ -1569,7 +1576,7 @@ fn render_chip(
             .title
             .clone()
             .filter(|t| !t.is_empty())
-            .unwrap_or_else(|| "Contenu partagé".into()),
+            .unwrap_or_else(|| t!("message.chip.shared_content").into_owned()),
     };
     h_flex()
         .gap_2p5()
@@ -1598,7 +1605,7 @@ fn render_contact(attachment: &Attachment, p: &Palette) -> AnyElement {
         .title
         .clone()
         .filter(|t| !t.is_empty())
-        .unwrap_or_else(|| "Contact".into());
+        .unwrap_or_else(|| t!("message.attachment.contact").into_owned());
     h_flex()
         .max_w(px(300.))
         .gap_3()
@@ -1693,7 +1700,7 @@ impl MissiveApp {
             for reactor in &reaction.reactors {
                 let is_me = reactor.user_id == me;
                 let label = if is_me {
-                    "Vous · cliquer pour retirer".to_string()
+                    t!("message.reactions.you_click_to_remove").into_owned()
                 } else {
                     reactor.name.clone()
                 };
@@ -1750,11 +1757,11 @@ impl MissiveApp {
                         .py_1p5()
                         .text_size(px(12.5))
                         .text_color(p.text_faint)
-                        .child(div().flex_1().child(SharedString::from(if unknown == 1 {
-                            "1 autre personne".to_string()
-                        } else {
-                            format!("{unknown} autres personnes")
-                        })))
+                        .child(
+                            div().flex_1().child(SharedString::from(
+                                tn!("message.reactions.others", unknown).into_owned(),
+                            )),
+                        )
                         .child(div().text_size(px(16.)).child(SharedString::from(reaction.emoji.clone())))
                         .into_any_element(),
                 );
@@ -2033,6 +2040,7 @@ mod tests {
 
     #[::core::prelude::v1::test]
     fn delivery_states() {
+        let _guard = crate::i18n::scoped("fr");
         assert_eq!(delivery_label(&[], 100, false, 1, true), "Envoyé");
         assert_eq!(delivery_label(&[receipt(0, None)], 100, false, 1, false), "Envoyé");
         assert_eq!(
@@ -2047,6 +2055,25 @@ mod tests {
         assert_eq!(
             delivery_label(&[receipt(150, None), receipt(100, None)], 100, true, 2, false),
             "Vu par tout le monde"
+        );
+    }
+
+    #[::core::prelude::v1::test]
+    fn delivery_states_in_english() {
+        let _guard = crate::i18n::scoped("en");
+        assert_eq!(delivery_label(&[], 100, false, 1, true), "Sent");
+        assert_eq!(
+            delivery_label(&[receipt(0, Some(120))], 100, false, 1, false),
+            "Delivered"
+        );
+        assert_eq!(delivery_label(&[receipt(150, Some(120))], 100, false, 1, false), "Seen");
+        assert_eq!(
+            delivery_label(&[receipt(150, None), receipt(100, None)], 100, true, 2, false),
+            "Seen by everyone"
+        );
+        assert_eq!(
+            delivery_label(&[receipt(150, None), receipt(90, Some(100))], 100, true, 3, false),
+            "Seen by 1"
         );
     }
 

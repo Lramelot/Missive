@@ -45,7 +45,7 @@ impl Popout {
             TextareaState::new(window, cx)
                 .auto_grow(1, 6)
                 .submit_on_enter(true)
-                .placeholder("Écrire un message")
+                .placeholder(t!("popout.composer_placeholder"))
         });
         let subscriptions = vec![
             cx.observe(&app, |this, _, cx| this.sync(cx)),
@@ -228,7 +228,7 @@ impl Render for Popout {
                                     app.read(cx).render_message(&thread_id, index, &app, cx)
                                 },
                             )
-                            .with_jump_button_label("Derniers messages")
+                            .with_jump_button_label(t!("popout.jump_to_latest"))
                             .with_row_style(StyleRefinement::default().px(px(0.)).pb(px(0.)))
                             .size_full(),
                         ),
@@ -302,7 +302,7 @@ impl MissiveApp {
             });
             if let Err(err) = result {
                 app.update(cx, |this, cx| {
-                    this.set_error(err.context("Fenêtre impossible à ouvrir"));
+                    this.set_error(err.context(t!("popout.open_failed").into_owned()));
                     cx.notify();
                 });
             }

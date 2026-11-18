@@ -113,12 +113,12 @@ pub(crate) fn stepped_text_size(current: TextSize, step: i32) -> TextSize {
     TEXT_SIZES[(index + step.signum()).clamp(0, TEXT_SIZES.len() as i32 - 1) as usize]
 }
 
-fn text_size_label(size: TextSize) -> &'static str {
+fn text_size_notice(size: TextSize) -> SharedString {
     match size {
-        TextSize::Small => "petite",
-        TextSize::Normal => "normale",
-        TextSize::Large => "grande",
-        TextSize::Larger => "très grande",
+        TextSize::Small => ts!("find.text_size.small"),
+        TextSize::Normal => ts!("find.text_size.normal"),
+        TextSize::Large => ts!("find.text_size.large"),
+        TextSize::Larger => ts!("find.text_size.larger"),
     }
 }
 
@@ -136,8 +136,7 @@ impl MissiveApp {
         if self.selected.is_none() {
             return;
         }
-        let input =
-            cx.new(|cx| InputState::new(window, cx).placeholder("Rechercher dans la conversation"));
+        let input = cx.new(|cx| InputState::new(window, cx).placeholder(t!("find.placeholder")));
         let subscription =
             cx.subscribe_in(
                 &input,
@@ -422,7 +421,7 @@ impl MissiveApp {
             self.settings.save();
             self.on_appearance_changed(cx);
         }
-        self.show_toast(format!("Taille du texte : {}", text_size_label(next)), cx);
+        self.show_toast(text_size_notice(next), cx);
     }
 }
 

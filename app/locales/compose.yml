@@ -1,0 +1,164 @@
+_version: 2
+compose:
+  offline:
+    expired:
+      en: "Not sent, no connection"
+      fr: "Non envoyé, connexion absente"
+    cancelled:
+      en: "Sending cancelled"
+      fr: "Envoi annulé"
+  emoji_tab:
+    recent:
+      en: "Recent"
+      fr: "Récents"
+    smileys:
+      en: "Smileys"
+      fr: "Smileys"
+    people:
+      en: "People"
+      fr: "Personnes"
+    animals:
+      en: "Animals"
+      fr: "Animaux"
+    food:
+      en: "Food"
+      fr: "Nourriture"
+    activities:
+      en: "Activities"
+      fr: "Activités"
+    travel:
+      en: "Travel"
+      fr: "Voyages"
+    objects:
+      en: "Objects"
+      fr: "Objets"
+    symbols:
+      en: "Symbols"
+      fr: "Symboles"
+    flags:
+      en: "Flags"
+      fr: "Drapeaux"
+  error:
+    reaction:
+      en: "Couldn't add the reaction"
+      fr: "Réaction impossible"
+    send_unconfirmed:
+      en: "Sending not confirmed by Meta"
+      fr: "Envoi non confirmé par Meta"
+    send_failed:
+      en: "Sending failed"
+      fr: "Échec de l'envoi"
+  attach:
+    prompt:
+      en: "Attach"
+      fr: "Joindre"
+  emoji:
+    search_placeholder:
+      en: "Search emoji"
+      fr: "Rechercher un emoji"
+composer:
+  emoji:
+    tooltip:
+      en: "Emoji"
+      fr: "Emojis"
+    results:
+      en: "Results"
+      fr: "Résultats"
+    none_found:
+      en: "No emoji found"
+      fr: "Aucun emoji trouvé"
+    recent_hint:
+      en: "The emoji you use will appear here."
+      fr: "Les emojis que vous utilisez apparaîtront ici."
+    hover_hint:
+      en: "Hover over an emoji to preview it"
+      fr: "Survolez un emoji pour l'aperçu"
+  context:
+    editing:
+      en: "Editing message"
+      fr: "Modification du message"
+    reply_to_self:
+      en: "Replying to yourself"
+      fr: "Réponse à vous-même"
+    reply_to:
+      en: "Reply to %{name}"
+      fr: "Réponse à %{name}"
+  scheduled:
+    overdue:
+      one:
+        en: "%{count} scheduled message · %{overdue} to review"
+        fr: "%{count} message programmé · %{overdue} à vérifier"
+      other:
+        en: "%{count} scheduled messages · %{overdue} to review"
+        fr: "%{count} messages programmés · %{overdue} à vérifier"
+    single:
+      en: "1 scheduled message · %{when}"
+      fr: "1 message programmé · %{when}"
+    multiple:
+      en: "%{count} scheduled messages · next %{when}"
+      fr: "%{count} messages programmés · prochain %{when}"
+    view:
+      en: "View"
+      fr: "Voir"
+  discreet:
+    notice:
+      en: "Discreet reading — the sender doesn't know you've read it"
+      fr: "Lecture discrète — l'expéditeur ne sait pas que vous avez lu"
+    mark_read:
+      en: "Mark as read"
+      fr: "Marquer comme lu"
+  snippets:
+    add_hint:
+      en: "Add quick replies in Settings"
+      fr: "Ajoutez des réponses rapides dans Paramètres"
+    title:
+      en: "Quick replies"
+      fr: "Réponses rapides"
+  mentions:
+    title:
+      en: "Mention"
+      fr: "Mentionner"
+voice:
+  error:
+    unsupported_format:
+      en: "Audio format not supported: use “Open”."
+      fr: "Format audio non pris en charge : utilisez « Ouvrir »."
+    no_output_device:
+      en: "No audio output available"
+      fr: "Sortie audio indisponible"
+    microphone_unavailable:
+      en: "Microphone unavailable"
+      fr: "Micro indisponible"
+    recording_failed:
+      en: "Couldn't record"
+      fr: "Enregistrement impossible"
+    recording_interrupted:
+      en: "Recording interrupted"
+      fr: "Enregistrement interrompu"
+    too_short:
+      en: "Voice message too short"
+      fr: "Message vocal trop court"
+    send_failed:
+      en: "Couldn't send the voice message. %{reason}"
+      fr: "Échec de l'envoi du message vocal. %{reason}"
+    unavailable:
+      en: "Voice message unavailable. %{reason}"
+      fr: "Message vocal indisponible. %{reason}"
+    playback_failed:
+      en: "Couldn't play the audio"
+      fr: "Lecture audio impossible"
+voice_view:
+  label:
+    open:
+      en: "Open"
+      fr: "Ouvrir"
+    unavailable:
+      en: "Unavailable"
+      fr: "Indisponible"
+  recording:
+    max_reached:
+      en: "Maximum length reached"
+      fr: "Durée maximale atteinte"
+    opening_microphone:
+      en: "Opening microphone…"
+      fr: "Ouverture du micro…"

@@ -36,10 +36,16 @@ pub(crate) struct MessageMenu {
 }
 
 impl MessageMenu {
-    pub(crate) fn confirming(&self) -> Option<(&'static str, &'static str)> {
+    pub(crate) fn confirming(&self) -> Option<(SharedString, SharedString)> {
         match self.confirm? {
-            Confirm::Unsend => Some(("Retirer ce message pour tout le monde ?", "Retirer")),
-            Confirm::DeleteForMe => Some(("Supprimer ce message pour vous ?", "Supprimer")),
+            Confirm::Unsend => Some((
+                ts!("message_ops.confirm.unsend.question"),
+                ts!("message_ops.confirm.unsend.button"),
+            )),
+            Confirm::DeleteForMe => Some((
+                ts!("message_ops.confirm.delete.question"),
+                ts!("message_ops.confirm.delete.button"),
+            )),
         }
     }
 }
@@ -362,11 +368,11 @@ impl MissiveApp {
             message.text.clone()
         };
         if text.is_empty() {
-            self.show_toast("Aucun texte à copier", cx);
+            self.show_toast(t!("message_ops.copy.nothing"), cx);
             return;
         }
         cx.write_to_clipboard(ClipboardItem::new_string(text));
-        self.show_toast("Texte copié", cx);
+        self.show_toast(t!("message_ops.copy.done"), cx);
     }
 
     pub(crate) fn start_edit(
@@ -511,7 +517,7 @@ impl MissiveApp {
                         cx,
                     );
                     this.show_toast(
-                        format!("Modification impossible : {}", action_error(&err)),
+                        t!("message_ops.edit.failed", error = action_error(&err)),
                         cx,
                     );
                 });
@@ -563,7 +569,10 @@ impl MissiveApp {
                         },
                         cx,
                     );
-                    this.show_toast(format!("Retrait impossible : {}", action_error(&err)), cx);
+                    this.show_toast(
+                        t!("message_ops.unsend.failed", error = action_error(&err)),
+                        cx,
+                    );
                 });
             }
         })
@@ -587,7 +596,7 @@ impl MissiveApp {
                 let _ = this.update(cx, |this, cx| {
                     this.reinsert_message(message, cx);
                     this.show_toast(
-                        format!("Suppression impossible : {}", action_error(&err)),
+                        t!("message_ops.delete.failed", error = action_error(&err)),
                         cx,
                     );
                 });
@@ -628,7 +637,7 @@ impl MissiveApp {
             return;
         }
         let input =
-            cx.new(|cx| InputState::new(window, cx).placeholder("Rechercher une discussion"));
+            cx.new(|cx| InputState::new(window, cx).placeholder(t!("message_ops.forward.search_placeholder")));
         let subscription =
             cx.subscribe_in(
                 &input,
@@ -685,7 +694,7 @@ impl MissiveApp {
             }
             None if forward.selected.len() < MAX_FORWARD => forward.selected.push(thread_id),
             None => {
-                self.show_toast(format!("{MAX_FORWARD} conversations au maximum"), cx);
+                self.show_toast(t!("message_ops.forward.max", max = MAX_FORWARD), cx);
                 return;
             }
         }
@@ -723,9 +732,9 @@ impl MissiveApp {
                     }
                     this.show_toast(
                         if count > 1 {
-                            format!("Message transféré dans {count} conversations")
+                            t!("message_ops.forward.done_many", count = count)
                         } else {
-                            "Message transféré".to_string()
+                            t!("message_ops.forward.done_one")
                         },
                         cx,
                     );
@@ -736,7 +745,10 @@ impl MissiveApp {
                     {
                         forward.busy = false;
                     }
-                    this.show_toast(format!("Transfert impossible : {}", action_error(&err)), cx);
+                    this.show_toast(
+                        t!("message_ops.forward.failed", error = action_error(&err)),
+                        cx,
+                    );
                 }
             });
         })
@@ -772,7 +784,7 @@ impl MissiveApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> (Entity<InputState>, Subscription) {
-        let input = cx.new(|cx| InputState::new(window, cx).placeholder("Option"));
+        let input = cx.new(|cx| InputState::new(window, cx).placeholder(t!("message_ops.poll.option_placeholder")));
         let subscription = cx.subscribe_in(
             &input,
             window,
@@ -817,7 +829,7 @@ impl MissiveApp {
         if !self.can_create_poll() {
             return;
         }
-        let question = cx.new(|cx| InputState::new(window, cx).placeholder("Posez une question"));
+        let question = cx.new(|cx| InputState::new(window, cx).placeholder(t!("message_ops.poll.question_placeholder")));
         let mut subscriptions = vec![cx.subscribe_in(
             &question,
             window,
@@ -895,7 +907,7 @@ impl MissiveApp {
     pub(crate) fn submit_poll(&mut self, cx: &mut Context<Self>) {
         let Some((question, options)) = self.poll_draft(cx) else {
             if let Some(poll) = self.message_ops.poll.as_mut() {
-                poll.error = Some("Une question et au moins deux options sont nécessaires.".into());
+                poll.error = Some(ts!("message_ops.poll.incomplete"));
             }
             cx.notify();
             return;
@@ -928,7 +940,7 @@ impl MissiveApp {
                         {
                             this.message_ops.poll = None;
                         }
-                        this.show_toast("Sondage créé", cx);
+                        this.show_toast(t!("message_ops.poll.created"), cx);
                     }
                     Err(err) => {
                         if let Some(poll) = this.message_ops.poll.as_mut()
@@ -1014,7 +1026,10 @@ impl MissiveApp {
                 }
                 if let Err(err) = result {
                     this.remeasure_message(&thread_id, &message_id, cx);
-                    this.show_toast(format!("Vote impossible : {}", action_error(&err)), cx);
+                    this.show_toast(
+                        t!("message_ops.poll.vote_failed", error = action_error(&err)),
+                        cx,
+                    );
                 }
                 cx.notify();
             });
@@ -1079,7 +1094,7 @@ impl MissiveApp {
         }
         let Some(bridge) = self.bridge() else { return };
         self.message_ops.jumping = Some(message_id.clone());
-        self.show_toast("Recherche du message d'origine…", cx);
+        self.show_toast(t!("message_ops.jump.searching"), cx);
         cx.spawn(async move |this, cx| {
             let mut empty_rounds = 0;
             let mut found = false;
@@ -1131,7 +1146,7 @@ impl MissiveApp {
                 if shown {
                     this.toast = None;
                 } else if this.selected.as_deref() == Some(thread_id.as_str()) {
-                    this.show_toast("Message d'origine introuvable", cx);
+                    this.show_toast(t!("message_ops.jump.not_found"), cx);
                 }
                 cx.notify();
             });

@@ -250,9 +250,10 @@ impl MissiveApp {
             TextareaState::new(window, cx)
                 .auto_grow(1, 6)
                 .submit_on_enter(true)
-                .placeholder("Écrire un message")
+                .placeholder(t!("app.composer.placeholder"))
         });
-        let search = cx.new(|cx| InputState::new(window, cx).placeholder("Rechercher"));
+        let search =
+            cx.new(|cx| InputState::new(window, cx).placeholder(t!("app.search.placeholder")));
         let cookie_c_user = cx.new(|cx| InputState::new(window, cx).placeholder("c_user"));
         let cookie_xs = cx.new(|cx| InputState::new(window, cx).placeholder("xs"));
         let cookie_datr = cx.new(|cx| InputState::new(window, cx).placeholder("datr"));
@@ -260,7 +261,7 @@ impl MissiveApp {
             InputState::new(window, cx)
                 .masked(true)
                 .validate(|text, _| text.len() <= 6 && text.chars().all(|c| c.is_ascii_digit()))
-                .placeholder("PIN à 6 chiffres")
+                .placeholder(t!("app.pin.placeholder"))
         });
 
         let subscriptions = vec![
@@ -507,7 +508,7 @@ impl MissiveApp {
         let xs = self.cookie_xs.read(cx).value().trim().to_string();
         let datr = self.cookie_datr.read(cx).value().trim().to_string();
         if c_user.is_empty() || xs.is_empty() || datr.is_empty() {
-            self.login_error = Some("Les trois cookies sont nécessaires.".into());
+            self.login_error = Some(t!("app.login.cookies_required").into());
             cx.notify();
             return;
         }
@@ -671,14 +672,14 @@ impl MissiveApp {
         self.link_detail = conn.detail.clone().map(Into::into);
         if conn.permanent {
             if conn.detail.as_deref() == Some("bridge process exited") {
-                self.screen = Screen::Fatal("Le bridge Messenger s'est arrêté.".into());
+                self.screen = Screen::Fatal(t!("app.fatal.bridge_stopped").into());
             } else {
                 self.reset_account_state();
                 self.screen = Screen::Login;
                 self.login_error = Some(
-                    format!(
-                        "Session expirée ou refusée par Meta : {}",
-                        conn.detail.unwrap_or_default()
+                    t!(
+                        "app.login.session_rejected",
+                        detail = conn.detail.unwrap_or_default()
                     )
                     .into(),
                 );
@@ -810,17 +811,22 @@ impl MissiveApp {
         let (title, is_group) = match thread {
             Some(thread) => (thread.name.clone(), thread.is_group),
             None if !message.sender_name.is_empty() => (message.sender_name.clone(), false),
-            None => ("Nouveau message".to_string(), false),
+            None => (t!("app.notification.new_message").to_string(), false),
         };
         let text = if !self.settings.notification_preview {
-            "Nouveau message".to_string()
+            t!("app.notification.new_message").to_string()
         } else if message.text.is_empty() {
             describe_attachments(message)
         } else {
             message.text.clone()
         };
         let body = if is_group && !message.sender_name.is_empty() {
-            format!("{} : {text}", message.sender_name)
+            t!(
+                "app.notification.group_body",
+                sender = message.sender_name,
+                text = text
+            )
+            .to_string()
         } else {
             text
         };
@@ -848,7 +854,7 @@ impl MissiveApp {
             return;
         }
         let actor = if reaction.actor_name.trim().is_empty() {
-            "Quelqu'un".to_string()
+            t!("app.notification.someone").to_string()
         } else {
             reaction.actor_name.clone()
         };
@@ -857,14 +863,25 @@ impl MissiveApp {
             _ => actor.clone(),
         };
         let body = if !self.settings.notification_preview {
-            "Nouvelle réaction à votre message".to_string()
+            t!("app.notification.new_reaction").to_string()
         } else {
             let preview = reaction.target_preview.trim();
-            let mut body = format!("{actor} a réagi {} à votre message", reaction.emoji);
-            if !preview.is_empty() {
-                body.push_str(&format!(" : « {preview} »"));
+            if preview.is_empty() {
+                t!(
+                    "app.notification.reacted",
+                    actor = actor,
+                    emoji = reaction.emoji
+                )
+                .to_string()
+            } else {
+                t!(
+                    "app.notification.reacted_quote",
+                    actor = actor,
+                    emoji = reaction.emoji,
+                    preview = preview
+                )
+                .to_string()
             }
-            body
         };
         let notification = Notification {
             title,
@@ -1054,7 +1071,7 @@ impl MissiveApp {
         let Some(bridge) = self.bridge() else { return };
         let pin = self.pin_input.read(cx).value().trim().to_string();
         if pin.len() != 6 || !pin.chars().all(|c| c.is_ascii_digit()) {
-            self.pin_error = Some("Le PIN compte exactement 6 chiffres.".into());
+            self.pin_error = Some(t!("app.pin.six_digits").into());
             cx.notify();
             return;
         }
@@ -1419,13 +1436,10 @@ impl MissiveApp {
                 .iter()
                 .filter(|p| Some(p.user_id.as_str()) != me && self.participant_online(p))
                 .count();
-            return (online > 0).then(|| match online {
-                1 => "1 personne en ligne".to_string(),
-                n => format!("{n} personnes en ligne"),
-            });
+            return (online > 0).then(|| tn!("app.presence.people_online", online).to_string());
         }
         if self.is_online(thread) {
-            return Some("En ligne".to_string());
+            return Some(t!("app.presence.online").to_string());
         }
         thread.peer_last_active_ms.map(last_active_label)
     }
@@ -1440,7 +1454,7 @@ impl MissiveApp {
 
     pub(crate) fn participant_status(&self, participant: &Participant) -> Option<String> {
         if self.participant_online(participant) {
-            return Some("En ligne".to_string());
+            return Some(t!("app.presence.online").to_string());
         }
         participant.last_active_ms.map(last_active_label)
     }
@@ -1449,10 +1463,13 @@ impl MissiveApp {
 pub(crate) fn action_error(err: &anyhow::Error) -> String {
     match err.downcast_ref::<BridgeError>() {
         Some(bridge_error) if bridge_error.code == "unsupported" => {
-            "Messenger ne permet pas cette action dans cette conversation.".into()
+            t!("app.error.unsupported_action").to_string()
         }
         Some(bridge_error) if bridge_error.code == "not_found" => {
-            "Élément introuvable, il a peut-être été supprimé.".into()
+            t!("app.error.not_found").to_string()
+        }
+        Some(bridge_error) if bridge_error.code == "edit_rejected" => {
+            t!("message_ops.edit.rejected").to_string()
         }
         Some(bridge_error) => bridge_error.message.clone(),
         None => format!("{err:#}"),
@@ -1471,14 +1488,12 @@ fn pin_error_message(err: &anyhow::Error) -> String {
                 .and_then(|data| data.get("attempts_remaining"))
                 .and_then(|value| value.as_i64());
             match remaining {
-                Some(n) => format!("PIN incorrect. Il reste {n} essai(s) avant blocage par Meta."),
-                None => "PIN incorrect.".into(),
+                Some(n) => t!("app.pin.wrong_with_attempts", attempts = n).to_string(),
+                None => t!("app.pin.wrong").to_string(),
             }
         }
-        "pin_locked" => {
-            "Trop d'essais : Meta a bloqué la restauration par PIN pour ce compte.".into()
-        }
-        "unsupported" => "Aucune sauvegarde chiffrée n'existe pour ce compte.".into(),
+        "pin_locked" => t!("app.pin.locked").to_string(),
+        "unsupported" => t!("app.pin.no_backup").to_string(),
         _ => bridge_error.message.clone(),
     }
 }
@@ -1486,11 +1501,11 @@ fn pin_error_message(err: &anyhow::Error) -> String {
 pub(crate) fn last_active_label(timestamp_ms: i64) -> String {
     let elapsed_min = (chrono::Utc::now().timestamp_millis() - timestamp_ms).max(0) / 60_000;
     match elapsed_min {
-        0 => "Actif à l'instant".to_string(),
-        1..=59 => format!("Actif il y a {elapsed_min} min"),
-        60..=1439 => format!("Actif il y a {} h", elapsed_min / 60),
-        1440..=2879 => "Actif hier".to_string(),
-        _ => format!("Actif il y a {} j", elapsed_min / 1440),
+        0 => t!("app.presence.active_now").to_string(),
+        1..=59 => t!("app.presence.active_minutes", minutes = elapsed_min).to_string(),
+        60..=1439 => t!("app.presence.active_hours", hours = elapsed_min / 60).to_string(),
+        1440..=2879 => t!("app.presence.active_yesterday").to_string(),
+        _ => t!("app.presence.active_days", days = elapsed_min / 1440).to_string(),
     }
 }
 
@@ -1501,7 +1516,7 @@ pub(crate) fn preview(message: &Message) -> String {
         message.text.clone()
     };
     if message.is_outgoing {
-        format!("Vous : {body}")
+        t!("app.preview.outgoing", body = body).to_string()
     } else {
         body
     }
@@ -1509,20 +1524,20 @@ pub(crate) fn preview(message: &Message) -> String {
 
 pub(crate) fn describe_attachments(message: &Message) -> String {
     match message.attachments.first().map(|a| a.kind.as_str()) {
-        Some("image") => "Photo".into(),
+        Some("image") => t!("app.attachment.photo").to_string(),
         Some("video") if message.attachments[0].gif => "GIF".into(),
-        Some("video") => "Vidéo".into(),
-        Some("audio") => "Message vocal".into(),
-        Some("sticker") => "Sticker".into(),
+        Some("video") => t!("app.attachment.video").to_string(),
+        Some("audio") => t!("app.attachment.voice").to_string(),
+        Some("sticker") => t!("app.attachment.sticker").to_string(),
         Some("link") => message.attachments[0]
             .title
             .clone()
-            .unwrap_or_else(|| "Lien".into()),
+            .unwrap_or_else(|| t!("app.attachment.link").to_string()),
         Some("file") => message.attachments[0]
             .file_name
             .clone()
-            .unwrap_or_else(|| "Fichier".into()),
-        Some(_) => "Pièce jointe".into(),
+            .unwrap_or_else(|| t!("app.attachment.file").to_string()),
+        Some(_) => t!("app.attachment.other").to_string(),
         None => String::new(),
     }
 }

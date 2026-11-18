@@ -1,0 +1,497 @@
+_version: 2
+library:
+  search:
+    me:
+      en: "Me"
+      fr: "Moi"
+    person_placeholder:
+      en: "Person's name"
+      fr: "Nom d'une personne"
+    conversation_placeholder:
+      en: "Conversation name"
+      fr: "Nom de la conversation"
+  chip:
+    from:
+      en: "From: %{name}"
+      fr: "De : %{name}"
+    from_outside:
+      en: "From: %{name} · not in this conversation"
+      fr: "De : %{name} · pas dans cette conversation"
+    from_missing:
+      en: "From: %{name} · not found"
+      fr: "De : %{name} · introuvable"
+    within:
+      en: "In: %{name}"
+      fr: "Dans : %{name}"
+    within_unnamed:
+      en: "In: Conversation"
+      fr: "Dans : Conversation"
+    within_missing:
+      en: "In: %{name} · not found"
+      fr: "Dans : %{name} · introuvable"
+    unknown_kinds:
+      en: "Unknown type: %{kinds}"
+      fr: "Type inconnu : %{kinds}"
+    after:
+      en: "After: %{date}"
+      fr: "Après : %{date}"
+    before:
+      en: "Before: %{date}"
+      fr: "Avant : %{date}"
+  notice:
+    sender_outside:
+      en: "%{person} isn't in “%{thread}”, so there are no messages from them here."
+      fr: "%{person} ne fait pas partie de « %{thread} » : aucun message de cette personne ici."
+  problem:
+    from:
+      en: "No one matches “%{name}”."
+      fr: "Aucune personne ne correspond à « %{name} »."
+    within:
+      en: "No conversation matches “%{name}”."
+      fr: "Aucune conversation ne correspond à « %{name} »."
+    kinds:
+      en: "Types recognized after has: photo, video, link, file, voice, location."
+      fr: "Types reconnus après a: photo, vidéo, lien, fichier, vocal, position."
+    date:
+      en: "Unrecognized date. Examples: 12/03/2024, 2024-03-12, yesterday, march 2024, 2023."
+      fr: "Date non reconnue. Exemples : 12/03/2024, 2024-03-12, hier, mars 2024, 2023."
+  period:
+    today:
+      en: "Today"
+      fr: "Aujourd'hui"
+    last_7_days:
+      en: "Last 7 days"
+      fr: "7 derniers jours"
+    last_30_days:
+      en: "Last 30 days"
+      fr: "30 derniers jours"
+    this_year:
+      en: "This year"
+      fr: "Cette année"
+  kind:
+    photo:
+      en: "Photos"
+      fr: "Photos"
+    video:
+      en: "Videos"
+      fr: "Vidéos"
+    link:
+      en: "Links"
+      fr: "Liens"
+    file:
+      en: "Files"
+      fr: "Fichiers"
+    audio:
+      en: "Voice messages"
+      fr: "Messages vocaux"
+    location:
+      en: "Locations"
+      fr: "Positions"
+  history_unavailable:
+    en: "History unavailable"
+    fr: "Historique indisponible"
+  switcher_placeholder:
+    en: "Go to a chat…"
+    fr: "Aller à une discussion…"
+  lightbox:
+    image_unavailable:
+      en: "Image not available right now"
+      fr: "Image indisponible pour le moment"
+    copied:
+      en: "Image copied"
+      fr: "Image copiée"
+    copy_failed:
+      en: "Couldn't copy this image"
+      fr: "Impossible de copier cette image"
+    saved:
+      en: "Image saved"
+      fr: "Image enregistrée"
+    save_failed:
+      en: "Couldn't save the image"
+      fr: "Impossible d'enregistrer l'image"
+  video_open_failed:
+    en: "Couldn't open this video"
+    fr: "Impossible d'ouvrir cette vidéo"
+find:
+  placeholder:
+    en: "Search in conversation"
+    fr: "Rechercher dans la conversation"
+  text_size:
+    small:
+      en: "Text size: small"
+      fr: "Taille du texte : petite"
+    normal:
+      en: "Text size: normal"
+      fr: "Taille du texte : normale"
+    large:
+      en: "Text size: large"
+      fr: "Taille du texte : grande"
+    larger:
+      en: "Text size: extra large"
+      fr: "Taille du texte : très grande"
+overlays:
+  month:
+    jan:
+      en: "January"
+      fr: "janvier"
+    feb:
+      en: "February"
+      fr: "février"
+    mar:
+      en: "March"
+      fr: "mars"
+    apr:
+      en: "April"
+      fr: "avril"
+    may:
+      en: "May"
+      fr: "mai"
+    jun:
+      en: "June"
+      fr: "juin"
+    jul:
+      en: "July"
+      fr: "juillet"
+    aug:
+      en: "August"
+      fr: "août"
+    sep:
+      en: "September"
+      fr: "septembre"
+    oct:
+      en: "October"
+      fr: "octobre"
+    nov:
+      en: "November"
+      fr: "novembre"
+    dec:
+      en: "December"
+      fr: "décembre"
+  gallery:
+    title:
+      en: "Shared media"
+      fr: "Médias partagés"
+    tab_media:
+      en: "Photos and videos"
+      fr: "Photos et vidéos"
+    tab_files:
+      en: "Files"
+      fr: "Fichiers"
+    tab_links:
+      en: "Links"
+      fr: "Liens"
+    loading:
+      en: "Loading history…"
+      fr: "Chargement de l'historique…"
+    load_more:
+      en: "Load older"
+      fr: "Charger plus ancien"
+    empty:
+      en: "Nothing shared here."
+      fr: "Rien de partagé ici."
+    start_reached:
+      en: "Reached the start of the conversation."
+      fr: "Début de la conversation atteint."
+    link:
+      en: "Link"
+      fr: "Lien"
+    voice_message:
+      en: "Voice message"
+      fr: "Message vocal"
+    file:
+      en: "File"
+      fr: "Fichier"
+    count_none:
+      en: "No items"
+      fr: "Aucun élément"
+    count:
+      one:
+        en: "%{count} item"
+        fr: "%{count} élément"
+      other:
+        en: "%{count} items"
+        fr: "%{count} éléments"
+    count_more:
+      en: "%{label} · scroll to see more"
+      fr: "%{label} · défile pour en voir plus"
+  size:
+    bytes:
+      en: "%{size} B"
+      fr: "%{size} o"
+    kilobytes:
+      en: "%{size} KB"
+      fr: "%{size} Ko"
+    megabytes:
+      en: "%{size} MB"
+      fr: "%{size} Mo"
+  lightbox:
+    loading:
+      en: "Loading…"
+      fr: "Chargement…"
+    zoom_out:
+      en: "Zoom out (−)"
+      fr: "Zoom arrière (−)"
+    zoom_in:
+      en: "Zoom in (+)"
+      fr: "Zoom avant (+)"
+    fit:
+      en: "Fit to window (0)"
+      fr: "Ajuster à la fenêtre (0)"
+    zoom_level:
+      en: "%{percent}%"
+      fr: "%{percent} %"
+    copy:
+      en: "Copy image"
+      fr: "Copier l'image"
+    save:
+      en: "Save as…"
+      fr: "Enregistrer sous…"
+    open:
+      en: "Open with default app"
+      fr: "Ouvrir avec l'application par défaut"
+  switcher:
+    escape:
+      en: "Esc"
+      fr: "Échap"
+    empty:
+      en: "No chats"
+      fr: "Aucune discussion"
+    navigate:
+      en: "↑ ↓ navigate"
+      fr: "↑ ↓ naviguer"
+    open:
+      en: "Enter open"
+      fr: "Entrée ouvrir"
+    step:
+      en: "Alt+↑/↓ previous/next chat"
+      fr: "Alt+↑/↓ discussion précédente/suivante"
+thread_dialogs:
+  button:
+    cancel:
+      en: "Cancel"
+      fr: "Annuler"
+    save:
+      en: "Save"
+      fr: "Enregistrer"
+    create:
+      en: "Create"
+      fr: "Créer"
+    close:
+      en: "Close"
+      fr: "Fermer"
+  menu:
+    mark_read:
+      en: "Mark as read"
+      fr: "Marquer comme lu"
+    mark_unread:
+      en: "Mark as unread"
+      fr: "Marquer comme non lu"
+    accept_request:
+      en: "Accept request"
+      fr: "Accepter la demande"
+    unmute:
+      en: "Unmute"
+      fr: "Réactiver les notifications"
+    mute:
+      en: "Mute"
+      fr: "Mettre en sourdine"
+    unarchive:
+      en: "Unarchive"
+      fr: "Désarchiver"
+    archive:
+      en: "Archive in Missive"
+      fr: "Archiver dans Missive"
+    add_to_folder:
+      en: "Add to folder"
+      fr: "Ajouter au dossier"
+    remove_from_folder:
+      en: "Remove from “%{folder}”"
+      fr: "Retirer du dossier « %{folder} »"
+    priority:
+      en: "Priority conversation"
+      fr: "Conversation prioritaire"
+    delete:
+      en: "Delete conversation"
+      fr: "Supprimer la conversation"
+  mute:
+    one_hour:
+      en: "For 1 hour"
+      fr: "Pendant 1 heure"
+    eight_hours:
+      en: "For 8 hours"
+      fr: "Pendant 8 heures"
+    one_day:
+      en: "For 24 hours"
+      fr: "Pendant 24 heures"
+    forever:
+      en: "Until I turn it back on"
+      fr: "Jusqu'à réactivation"
+  member:
+    remove_admin:
+      en: "Remove as admin"
+      fr: "Retirer des administrateurs"
+    make_admin:
+      en: "Make admin"
+      fr: "Nommer administrateur"
+    remove:
+      en: "Remove from group"
+      fr: "Retirer du groupe"
+  rename:
+    title:
+      en: "Rename group"
+      fr: "Renommer le groupe"
+    hint:
+      en: "Everyone in the group will see the new name."
+      fr: "Tous les membres verront le nouveau nom."
+  people:
+    mode_direct:
+      en: "Chat"
+      fr: "Discussion"
+    mode_group:
+      en: "Create a group"
+      fr: "Créer un groupe"
+    searching:
+      en: "Searching…"
+      fr: "Recherche…"
+    no_results:
+      en: "No one found."
+      fr: "Aucune personne trouvée."
+    prompt:
+      en: "Search for someone by name."
+      fr: "Recherchez une personne par son nom."
+    suggestions:
+      en: "Suggestions"
+      fr: "Suggestions"
+    results:
+      en: "People"
+      fr: "Personnes"
+    selected_none:
+      en: "No one selected"
+      fr: "Aucune personne sélectionnée"
+    selected:
+      one:
+        en: "%{count} person selected"
+        fr: "%{count} personne sélectionnée"
+      other:
+        en: "%{count} people selected"
+        fr: "%{count} personnes sélectionnées"
+    add_title:
+      en: "Add people"
+      fr: "Ajouter des personnes"
+    new_title:
+      en: "New message"
+      fr: "Nouveau message"
+    add:
+      en: "Add"
+      fr: "Ajouter"
+    create_group:
+      en: "Create group"
+      fr: "Créer le groupe"
+    friend:
+      en: "Friend"
+      fr: "Ami·e"
+    existing:
+      en: "Existing chat"
+      fr: "Discussion existante"
+    unknown_user:
+      en: "Messenger user"
+      fr: "Utilisateur Messenger"
+  folder:
+    new_item:
+      en: "New folder…"
+      fr: "Nouveau dossier…"
+    rename_item:
+      en: "Rename"
+      fr: "Renommer"
+    delete_item:
+      en: "Delete folder"
+      fr: "Supprimer le dossier"
+    rename_title:
+      en: "Rename folder"
+      fr: "Renommer le dossier"
+    rename_hint:
+      en: "The new name appears in your chat tabs."
+      fr: "Le nouveau nom s'affiche dans les onglets de vos discussions."
+    new_title:
+      en: "New folder"
+      fr: "Nouveau dossier"
+    new_with_thread_hint:
+      en: "The chat will be added to this folder. Folders stay on this computer."
+      fr: "La discussion sera ajoutée à ce dossier. Les dossiers restent sur cet ordinateur."
+    new_hint:
+      en: "Group your chats however you like. Folders stay on this computer."
+      fr: "Regroupez vos discussions comme vous le souhaitez. Les dossiers restent sur cet ordinateur."
+  export:
+    title:
+      en: "Export conversation"
+      fr: "Exporter la conversation"
+    running_hint:
+      en: "The full history is fetched from Messenger, which can take several minutes. You can close this window: you'll get a notification when it's done."
+      fr: "Tout l'historique est récupéré depuis Messenger, cela peut prendre plusieurs minutes. Vous pouvez fermer cette fenêtre : une notification s'affichera à la fin."
+    cancelling:
+      en: "Cancelling…"
+      fr: "Annulation…"
+    cancel_job:
+      en: "Cancel export"
+      fr: "Annuler l'export"
+    hide:
+      en: "Hide"
+      fr: "Masquer"
+    done:
+      en: "Export complete"
+      fr: "Export terminé"
+    open_folder:
+      en: "Open folder"
+      fr: "Ouvrir le dossier"
+    retry:
+      en: "Try again"
+      fr: "Réessayer"
+    no_dir:
+      en: "No folder chosen"
+      fr: "Aucun dossier choisi"
+    format:
+      en: "Format"
+      fr: "Format"
+    include_media:
+      en: "Include media"
+      fr: "Inclure les médias"
+    media_hint:
+      en: "Photos, videos, files and voice messages, in a folder next to it"
+      fr: "Photos, vidéos, fichiers et messages vocaux, dans un dossier à côté"
+    destination:
+      en: "Destination folder"
+      fr: "Dossier de destination"
+    choose:
+      en: "Choose…"
+      fr: "Choisir…"
+    busy:
+      en: "Another export or media download is in progress. Wait for it to finish or cancel it."
+      fr: "Un autre export ou téléchargement de médias est en cours. Attendez qu'il se termine ou annulez-le."
+    start:
+      en: "Export"
+      fr: "Exporter"
+  search:
+    title:
+      en: "Filter search"
+      fr: "Filtrer la recherche"
+    clear:
+      en: "Clear all"
+      fr: "Tout effacer"
+    containing:
+      en: "Contains"
+      fr: "Contenant"
+    period:
+      en: "Date"
+      fr: "Période"
+    sent_by:
+      en: "Sent by"
+      fr: "Envoyé par"
+    in_conversation:
+      en: "In conversation"
+      fr: "Dans la conversation"
+    this_conversation:
+      en: "This conversation"
+      fr: "Cette conversation"
+    help:
+      en: "You can also type from:, in:, has:photo, before: or after: in the search, for example “after:march 2024”."
+      fr: "Vous pouvez aussi taper de:, dans:, a:photo, avant: ou après: dans la recherche, par exemple « après:mars 2024 »."

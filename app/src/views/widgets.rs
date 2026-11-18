@@ -215,22 +215,59 @@ pub fn link_color(link: Link, p: &Palette) -> Hsla {
 
 pub fn link_label(link: Link, detail: Option<&SharedString>) -> SharedString {
     match (link, detail) {
-        (Link::Connecting, _) => "Connexion à Messenger…".into(),
-        (Link::Reconnecting, _) => "Connexion perdue, nouvelle tentative…".into(),
-        (Link::Error, Some(detail)) => format!("Erreur : {detail}").into(),
-        (Link::Error, None) => "Erreur de connexion".into(),
-        (Link::Online, _) => "En ligne".into(),
+        (Link::Connecting, _) => ts!("widgets.link.connecting"),
+        (Link::Reconnecting, _) => ts!("widgets.link.reconnecting"),
+        (Link::Error, Some(detail)) => ts!("widgets.link.error_detail", detail = detail),
+        (Link::Error, None) => ts!("widgets.link.error"),
+        (Link::Online, _) => ts!("widgets.link.online"),
     }
 }
 
-const WEEKDAYS: [&str; 7] = ["lun.", "mar.", "mer.", "jeu.", "ven.", "sam.", "dim."];
-const WEEKDAYS_LONG: [&str; 7] = [
-    "Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi", "Dimanche",
+const WEEKDAY_KEYS: [&str; 7] = [
+    "common.weekday.mon",
+    "common.weekday.tue",
+    "common.weekday.wed",
+    "common.weekday.thu",
+    "common.weekday.fri",
+    "common.weekday.sat",
+    "common.weekday.sun",
 ];
-const MONTHS: [&str; 12] = [
-    "janv.", "févr.", "mars", "avr.", "mai", "juin", "juil.", "août", "sept.", "oct.", "nov.",
-    "déc.",
+const MONTH_KEYS: [&str; 12] = [
+    "common.month_short.jan",
+    "common.month_short.feb",
+    "common.month_short.mar",
+    "common.month_short.apr",
+    "common.month_short.may",
+    "common.month_short.jun",
+    "common.month_short.jul",
+    "common.month_short.aug",
+    "common.month_short.sep",
+    "common.month_short.oct",
+    "common.month_short.nov",
+    "common.month_short.dec",
 ];
+const WEEKDAY_SHORT_KEYS: [&str; 7] = [
+    "widgets.weekday_short.mon",
+    "widgets.weekday_short.tue",
+    "widgets.weekday_short.wed",
+    "widgets.weekday_short.thu",
+    "widgets.weekday_short.fri",
+    "widgets.weekday_short.sat",
+    "widgets.weekday_short.sun",
+];
+
+fn weekday_long(index: usize) -> String {
+    let name = t!(WEEKDAY_KEYS[index]);
+    let mut chars = name.chars();
+    match chars.next() {
+        Some(first) => first.to_uppercase().chain(chars).collect(),
+        None => String::new(),
+    }
+}
+
+fn month_short(index: usize) -> String {
+    t!(MONTH_KEYS[index]).into_owned()
+}
 
 pub fn format_short(timestamp_ms: i64) -> SharedString {
     let Some(time) = Local.timestamp_millis_opt(timestamp_ms).single() else {
@@ -240,17 +277,22 @@ pub fn format_short(timestamp_ms: i64) -> SharedString {
     let minutes = (now - time).num_minutes();
     let days = (now.date_naive() - time.date_naive()).num_days();
     let text = if (0..1).contains(&minutes) {
-        "maintenant".into()
+        t!("widgets.time.now").into_owned()
     } else if (1..60).contains(&minutes) {
-        format!("{minutes} min")
+        t!("widgets.time.minutes_ago", minutes = minutes).into_owned()
     } else if days == 0 {
         time.format("%H:%M").to_string()
     } else if days == 1 {
-        "Hier".into()
+        t!("widgets.time.yesterday").into_owned()
     } else if days < 7 {
-        WEEKDAYS[time.weekday().num_days_from_monday() as usize].into()
+        t!(WEEKDAY_SHORT_KEYS[time.weekday().num_days_from_monday() as usize]).into_owned()
     } else if time.year() == now.year() {
-        format!("{} {}", time.day(), MONTHS[time.month0() as usize])
+        t!(
+            "widgets.date.day_month",
+            day = time.day(),
+            month = month_short(time.month0() as usize)
+        )
+        .into_owned()
     } else {
         time.format("%d/%m/%y").to_string()
     };
@@ -263,27 +305,31 @@ pub fn format_separator(timestamp_ms: i64) -> SharedString {
     };
     let now = Local::now();
     let days = (now.date_naive() - time.date_naive()).num_days();
-    let clock = time.format("%H:%M");
+    let clock = time.format("%H:%M").to_string();
     let text = match days {
-        0 => format!("Aujourd'hui · {clock}"),
-        1 => format!("Hier · {clock}"),
-        2..=6 => format!(
-            "{} · {clock}",
-            WEEKDAYS_LONG[time.weekday().num_days_from_monday() as usize]
-        ),
-        _ if time.year() == now.year() => {
-            format!(
-                "{} {} · {clock}",
-                time.day(),
-                MONTHS[time.month0() as usize]
-            )
-        }
-        _ => format!(
-            "{} {} {} · {clock}",
-            time.day(),
-            MONTHS[time.month0() as usize],
-            time.year()
-        ),
+        0 => t!("widgets.separator.today", clock = clock).into_owned(),
+        1 => t!("widgets.separator.yesterday", clock = clock).into_owned(),
+        2..=6 => t!(
+            "widgets.separator.weekday",
+            weekday = weekday_long(time.weekday().num_days_from_monday() as usize),
+            clock = clock
+        )
+        .into_owned(),
+        _ if time.year() == now.year() => t!(
+            "widgets.separator.day_month",
+            day = time.day(),
+            month = month_short(time.month0() as usize),
+            clock = clock
+        )
+        .into_owned(),
+        _ => t!(
+            "widgets.separator.day_month_year",
+            day = time.day(),
+            month = month_short(time.month0() as usize),
+            year = time.year(),
+            clock = clock
+        )
+        .into_owned(),
     };
     text.into()
 }

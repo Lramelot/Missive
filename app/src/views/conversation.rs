@@ -66,13 +66,13 @@ impl MissiveApp {
                     div()
                         .text_size(px(20.))
                         .font_weight(FontWeight::EXTRA_BOLD)
-                        .child("Vos discussions"),
+                        .child(ts!("conversation.empty.title")),
                 )
                 .child(
                     div()
                         .text_size(px(13.))
                         .text_color(p.text_muted)
-                        .child("Choisissez une conversation dans la liste."),
+                        .child(ts!("conversation.empty.text")),
                 )
                 .into_any_element();
         };
@@ -114,7 +114,7 @@ impl MissiveApp {
                                 view.read(cx).render_message(&thread_id, index, &view, cx)
                             }
                         })
-                        .with_jump_button_label("Derniers messages")
+                        .with_jump_button_label(t!("conversation.jump_to_latest"))
                         .with_row_style(StyleRefinement::default().px(px(0.)).pb(px(0.)))
                         .size_full(),
                     )
@@ -122,9 +122,9 @@ impl MissiveApp {
             })
             .when(typing, |el| {
                 let label = if thread.is_group {
-                    "Quelqu'un écrit".to_string()
+                    t!("conversation.typing.someone").into_owned()
                 } else {
-                    format!("{} écrit", display_name(thread))
+                    t!("conversation.typing.person", name = display_name(thread)).into_owned()
                 };
                 el.child(
                     div()
@@ -172,7 +172,7 @@ impl MissiveApp {
                     p.text_faint
                 }))
         };
-        let label = |text: &'static str| {
+        let label = |text: SharedString| {
             div()
                 .flex_none()
                 .text_size(px(12.5))
@@ -204,17 +204,17 @@ impl MissiveApp {
                             .size(px(14.))
                             .text_color(p.text_faint),
                     )
-                    .child(label("Recherche…"))
+                    .child(label(ts!("conversation.find.searching")))
                     .into_any_element(),
             )
         } else if bar.exhausted {
-            Some(label("Aucun résultat").into_any_element())
+            Some(label(ts!("conversation.find.no_results")).into_any_element())
         } else {
             Some(
                 h_flex()
                     .flex_none()
                     .gap_2()
-                    .child(label("Aucun résultat chargé"))
+                    .child(label(ts!("conversation.find.none_loaded")))
                     .child(
                         div()
                             .id("find-further")
@@ -223,7 +223,7 @@ impl MissiveApp {
                             .text_color(p.accent_text)
                             .cursor_pointer()
                             .hover(|style| style.underline())
-                            .child("Chercher plus loin")
+                            .child(ts!("conversation.find.search_further"))
                             .on_click(cx.listener(|this, _, _, cx| this.find_further(cx))),
                     )
                     .into_any_element(),
@@ -260,20 +260,20 @@ impl MissiveApp {
                         .child(
                             nav("find-older", IconName::ChevronUp, navigable)
                                 .tooltip(|window, cx| {
-                                    Tooltip::new("Plus ancien (Entrée)").build(window, cx)
+                                    Tooltip::new(ts!("conversation.find.older")).build(window, cx)
                                 })
                                 .on_click(cx.listener(|this, _, _, cx| this.step_find(-1, cx))),
                         )
                         .child(
                             nav("find-newer", IconName::ChevronDown, navigable)
                                 .tooltip(|window, cx| {
-                                    Tooltip::new("Plus récent (Maj+Entrée)").build(window, cx)
+                                    Tooltip::new(ts!("conversation.find.newer")).build(window, cx)
                                 })
                                 .on_click(cx.listener(|this, _, _, cx| this.step_find(1, cx))),
                         )
                         .child(
                             nav("find-close", IconName::X, true)
-                                .tooltip(|window, cx| Tooltip::new("Fermer (Échap)").build(window, cx))
+                                .tooltip(|window, cx| Tooltip::new(ts!("conversation.find.close")).build(window, cx))
                                 .on_click(cx.listener(|this, _, _, cx| {
                                     this.close_find(cx);
                                 })),
@@ -301,18 +301,25 @@ impl MissiveApp {
         if typing {
             return line
                 .text_color(p.accent_text)
-                .child("écrit…")
+                .child(ts!("conversation.subtitle.typing"))
                 .into_any_element();
         }
         if self.is_request_thread(thread) {
-            return line.child("Demande de message").into_any_element();
+            return line
+                .child(ts!("conversation.subtitle.request"))
+                .into_any_element();
         }
         if self.is_online(thread) {
-            return line.child(dot()).child("En ligne").into_any_element();
+            return line
+                .child(dot())
+                .child(ts!("conversation.subtitle.online"))
+                .into_any_element();
         }
         if let Some(label) = self.activity_label(thread) {
             let text = match members {
-                Some(count) => format!("{label}, {count} membres"),
+                Some(count) => {
+                    tn!("conversation.subtitle.activity_members", count, label = label).into_owned()
+                }
                 None => label,
             };
             return line
@@ -324,14 +331,14 @@ impl MissiveApp {
             return line
                 .gap_1()
                 .child(Icon::new(IconName::Lock).size(px(12.)))
-                .child("Chiffré de bout en bout")
+                .child(ts!("conversation.e2ee"))
                 .into_any_element();
         }
         if thread.is_group {
             return line
                 .child(SharedString::from(match members {
-                    Some(count) => format!("Groupe, {count} membres"),
-                    None => "Groupe".to_string(),
+                    Some(count) => tn!("conversation.subtitle.group_members", count).into_owned(),
+                    None => t!("conversation.subtitle.group").into_owned(),
                 }))
                 .into_any_element();
         }
@@ -424,7 +431,7 @@ impl MissiveApp {
                     .cursor_pointer()
                     .hover(|style| style.opacity(0.85))
                     .tooltip(|window, cx| {
-                        Tooltip::new("Voir le profil Facebook").build(window, cx)
+                        Tooltip::new(ts!("conversation.header.view_profile")).build(window, cx)
                     })
                     .on_click(move |_, _, cx| crate::desktop::open_web(&url, cx))
                     .child(self.member_stack(thread, p))
@@ -437,14 +444,14 @@ impl MissiveApp {
                     .child(
                         icon_button("open-popout", IconName::ExternalLink, false, p)
                             .tooltip(|window, cx| {
-                                Tooltip::new("Ouvrir dans une fenêtre séparée").build(window, cx)
+                                Tooltip::new(ts!("conversation.header.open_popout")).build(window, cx)
                             })
                             .on_click(cx.listener(|this, _, _, cx| this.open_popout(cx))),
                     )
                     .child(
                         icon_button("toggle-info", IconName::Info, self.info_open, p)
                             .tooltip(|window, cx| {
-                                Tooltip::new("Informations sur la conversation").build(window, cx)
+                                Tooltip::new(ts!("conversation.header.info")).build(window, cx)
                             })
                             .on_click(cx.listener(|this, _, _, cx| this.toggle_info(cx))),
                     ),
@@ -485,16 +492,14 @@ impl MissiveApp {
                                 div()
                                     .text_size(px(14.))
                                     .font_weight(FontWeight::BOLD)
-                                    .child(SharedString::from(format!(
-                                        "{name} souhaite vous envoyer un message"
-                                    ))),
+                                    .child(ts!("conversation.request.title", name = name)),
                             )
                             .child(
                                 div()
                                     .text_size(px(12.5))
                                     .line_height(px(18.))
                                     .text_color(p.text_muted)
-                                    .child("Acceptez pour répondre et déplacer la conversation dans vos discussions. Tant que la demande n'est pas acceptée, l'expéditeur ne sait pas que vous avez vu ses messages."),
+                                    .child(ts!("conversation.request.text")),
                             ),
                     ),
             )
@@ -506,7 +511,7 @@ impl MissiveApp {
                         Button::new("request-delete")
                             .ghost()
                             .small()
-                            .label("Supprimer")
+                            .label(t!("conversation.request.delete"))
                             .on_click(cx.listener(move |this, _, _, cx| {
                                 this.confirm_delete_thread(&delete_id, cx)
                             })),
@@ -515,7 +520,7 @@ impl MissiveApp {
                         Button::new("request-accept")
                             .primary()
                             .small()
-                            .label("Accepter")
+                            .label(t!("conversation.request.accept"))
                             .on_click(cx.listener(move |this, _, _, cx| {
                                 this.accept_request(&accept_id, cx)
                             })),
@@ -545,10 +550,7 @@ impl MissiveApp {
                     .flex_1()
                     .min_w_0()
                     .text_color(p.text_muted)
-                    .child(SharedString::from(format!(
-                        "Vous avez bloqué {}. Cette personne ne peut plus vous écrire.",
-                        display_name(thread)
-                    ))),
+                    .child(ts!("conversation.blocked.text", name = display_name(thread))),
             )
             .child(
                 div()
@@ -557,7 +559,7 @@ impl MissiveApp {
                     .text_color(accent)
                     .font_weight(FontWeight::BOLD)
                     .cursor_pointer()
-                    .child("Débloquer")
+                    .child(ts!("conversation.blocked.unblock"))
                     .on_click(
                         cx.listener(move |this, _, _, cx| this.confirm_block(&peer, false, cx)),
                     ),
@@ -619,7 +621,7 @@ impl MissiveApp {
 
         let mute_text: SharedString = self
             .thread_mute_label(&thread)
-            .unwrap_or_else(|| "Notifications actives".to_string())
+            .unwrap_or_else(|| t!("conversation.info.notifications_on").into_owned())
             .into();
         let mute_thread = thread.id.clone();
         let hover = p.hover;
@@ -672,12 +674,12 @@ impl MissiveApp {
                 v_flex()
                     .flex_1()
                     .min_w_0()
-                    .child(div().text_size(px(13.5)).child("Conversation prioritaire"))
+                    .child(div().text_size(px(13.5)).child(ts!("conversation.info.priority")))
                     .child(
                         div()
                             .text_size(px(11.5))
                             .text_color(p.text_faint)
-                            .child("Passe outre les heures calmes"),
+                            .child(ts!("conversation.info.priority_hint")),
                     ),
             )
             .child(toggle_switch(priority, p))
@@ -688,9 +690,9 @@ impl MissiveApp {
         let media_done = media_save.is_some_and(|save| matches!(save.result, Some(Ok(_))));
         let media_label: SharedString = match media_save {
             Some(save) if save.result.is_none() => {
-                format!("Téléchargement… {}", save.progress_label()).into()
+                ts!("conversation.info.downloading", progress = save.progress_label())
             }
-            _ => "Télécharger tous les médias…".into(),
+            _ => ts!("conversation.info.download_all"),
         };
         let save_thread = thread.id.clone();
         let open_thread = thread.id.clone();
@@ -731,7 +733,11 @@ impl MissiveApp {
                         .font_weight(FontWeight::BOLD)
                         .text_color(if cancelling { p.text_faint } else { p.accent_text })
                         .when(!cancelling, |el| el.cursor_pointer())
-                        .child(if cancelling { "Annulation…" } else { "Annuler" })
+                        .child(if cancelling {
+                            ts!("conversation.info.cancelling")
+                        } else {
+                            ts!("conversation.info.cancel")
+                        })
                         .on_click(cx.listener(|this, _, _, cx| {
                             cx.stop_propagation();
                             this.cancel_archive(cx)
@@ -747,7 +753,7 @@ impl MissiveApp {
             action_entry(
                 "info-media-folder",
                 IconName::FolderOpen,
-                "Ouvrir le dossier des médias",
+                ts!("conversation.info.open_media_folder"),
                 false,
                 p,
             )
@@ -763,7 +769,7 @@ impl MissiveApp {
             .px_4()
             .pt_2()
             .gap_1()
-            .child(section_title("Exporter", p))
+            .child(section_title(ts!("conversation.info.export_section"), p))
             .child(
                 action_entry(
                     "info-export",
@@ -773,9 +779,9 @@ impl MissiveApp {
                         IconName::FileDown
                     },
                     if export_running_here {
-                        "Export en cours…"
+                        ts!("conversation.info.exporting")
                     } else {
-                        "Exporter la conversation…"
+                        ts!("conversation.info.export")
                     },
                     false,
                     p,
@@ -792,12 +798,12 @@ impl MissiveApp {
                     .px_4()
                     .pt_5()
                     .gap_1()
-                    .child(section_title("Personnaliser", p))
+                    .child(section_title(ts!("conversation.info.customize"), p))
                     .child(
                         action_entry(
                             "info-rename",
                             IconName::Pencil,
-                            "Renommer le groupe",
+                            ts!("conversation.info.rename_group"),
                             false,
                             p,
                         )
@@ -806,7 +812,7 @@ impl MissiveApp {
                         )),
                     )
                     .child(
-                        action_entry("info-photo", IconName::Camera, "Changer la photo", false, p)
+                        action_entry("info-photo", IconName::Camera, ts!("conversation.info.change_photo"), false, p)
                             .on_click(cx.listener(move |this, _, _, cx| {
                                 this.pick_thread_image(&photo_id, cx)
                             })),
@@ -815,7 +821,7 @@ impl MissiveApp {
                         action_entry(
                             "info-add",
                             IconName::UserPlus,
-                            "Ajouter des personnes",
+                            ts!("conversation.info.add_people"),
                             false,
                             p,
                         )
@@ -833,7 +839,7 @@ impl MissiveApp {
                 action_entry(
                     "info-accept",
                     IconName::Check,
-                    "Accepter la demande",
+                    ts!("conversation.info.accept_request"),
                     false,
                     p,
                 )
@@ -844,7 +850,7 @@ impl MissiveApp {
         if manage {
             let id = thread.id.clone();
             actions.push(
-                action_entry("info-leave", IconName::LogOut, "Quitter le groupe", true, p)
+                action_entry("info-leave", IconName::LogOut, ts!("conversation.info.leave_group"), true, p)
                     .on_click(cx.listener(move |this, _, _, cx| this.confirm_leave_group(&id, cx)))
                     .into_any_element(),
             );
@@ -852,9 +858,9 @@ impl MissiveApp {
         if let (false, Some(peer)) = (thread.is_group, thread.peer_id.clone()) {
             let blocked = thread.blocked;
             let label = if blocked {
-                format!("Débloquer {}", display_name(&thread))
+                t!("conversation.info.unblock", name = display_name(&thread)).into_owned()
             } else {
-                format!("Bloquer {}", display_name(&thread))
+                t!("conversation.info.block", name = display_name(&thread)).into_owned()
             };
             actions.push(
                 action_entry("info-block", IconName::Ban, label, !blocked, p)
@@ -869,7 +875,7 @@ impl MissiveApp {
             action_entry(
                 "info-delete",
                 IconName::Trash,
-                "Supprimer la conversation",
+                ts!("conversation.info.delete_thread"),
                 true,
                 p,
             )
@@ -902,18 +908,18 @@ impl MissiveApp {
                 .px_4()
                 .gap_2()
                 .when(thread.e2ee, |el| {
-                    el.child(row(IconName::Lock, "Chiffré de bout en bout".into()))
+                    el.child(row(IconName::Lock, ts!("conversation.e2ee")))
                 })
                 .child(notifications)
                 .when(!self.is_request_thread(&thread), |el| el.child(priority_row))
                 .when_some(ephemeral, |el, label| {
                     el.child(row(
                         IconName::Timer,
-                        format!("Messages éphémères : {label}").into(),
+                        ts!("conversation.info.ephemeral", label = label),
                     ))
                 })
                 .when(thread.is_group, |el| {
-                    el.child(row(IconName::Users, "Discussion de groupe".into()))
+                    el.child(row(IconName::Users, ts!("conversation.info.group_chat")))
                 }),
         )
         .children(management)
@@ -932,7 +938,7 @@ impl MissiveApp {
                                 .text_size(px(12.))
                                 .font_weight(FontWeight::BOLD)
                                 .text_color(p.text_muted)
-                                .child("Médias partagés"),
+                                .child(ts!("conversation.info.shared_media")),
                         )
                         .child(
                             div()
@@ -941,7 +947,7 @@ impl MissiveApp {
                                 .font_weight(FontWeight::BOLD)
                                 .text_color(p.accent_text)
                                 .cursor_pointer()
-                                .child("Tout voir")
+                                .child(ts!("conversation.info.see_all"))
                                 .on_click(cx.listener(|this, _, _, cx| {
                                     this.open_gallery(GalleryTab::Media, cx)
                                 })),
@@ -951,7 +957,7 @@ impl MissiveApp {
                     div()
                         .text_size(px(12.5))
                         .text_color(p.text_faint)
-                        .child("Aucune photo dans les messages chargés.")
+                        .child(ts!("conversation.info.no_photos"))
                         .into_any_element()
                 } else {
                     div()
@@ -986,7 +992,7 @@ impl MissiveApp {
                         .child(gallery_entry(
                             "gallery-media",
                             IconName::Images,
-                            "Photos et vidéos",
+                            ts!("conversation.info.photos_videos"),
                             GalleryTab::Media,
                             p,
                             cx,
@@ -994,7 +1000,7 @@ impl MissiveApp {
                         .child(gallery_entry(
                             "gallery-files",
                             IconName::FileText,
-                            "Fichiers",
+                            ts!("conversation.info.files"),
                             GalleryTab::Files,
                             p,
                             cx,
@@ -1002,7 +1008,7 @@ impl MissiveApp {
                         .child(gallery_entry(
                             "gallery-links",
                             IconName::Link,
-                            "Liens",
+                            ts!("conversation.info.links"),
                             GalleryTab::Links,
                             p,
                             cx,
@@ -1018,7 +1024,7 @@ impl MissiveApp {
                 .pt_2()
                 .pb_6()
                 .gap_1()
-                .child(section_title("Confidentialité", p))
+                .child(section_title(ts!("conversation.info.privacy"), p))
                 .children(actions),
         )
         .into_any_element()
@@ -1047,7 +1053,7 @@ fn toggle_switch(on: bool, p: &Palette) -> Div {
         .child(div().size(px(16.)).rounded_full().bg(p.on_accent))
 }
 
-fn section_title(text: &'static str, p: &Palette) -> Div {
+fn section_title(text: SharedString, p: &Palette) -> Div {
     div()
         .pb_1()
         .text_size(px(12.))
@@ -1085,7 +1091,7 @@ fn action_entry(
 fn gallery_entry(
     id: &'static str,
     icon: IconName,
-    label: &'static str,
+    label: SharedString,
     tab: GalleryTab,
     p: &Palette,
     cx: &mut Context<MissiveApp>,
@@ -1184,7 +1190,7 @@ impl MissiveApp {
                 let is_me = Some(&participant.user_id) == me.as_ref();
                 let online = !is_me && self.participant_online(participant);
                 let status = if is_me {
-                    Some("Vous".to_string())
+                    Some(t!("conversation.members.you").into_owned())
                 } else {
                     self.participant_status(participant)
                 };
@@ -1227,7 +1233,7 @@ impl MissiveApp {
                                                 .text_size(px(10.5))
                                                 .font_weight(FontWeight::BOLD)
                                                 .text_color(p.accent_text)
-                                                .child("Admin"),
+                                                .child(ts!("conversation.members.admin")),
                                         )
                                     }),
                             )
@@ -1267,10 +1273,10 @@ impl MissiveApp {
                         .text_size(px(12.))
                         .font_weight(FontWeight::BOLD)
                         .text_color(p.text_muted)
-                        .child(SharedString::from(format!(
-                            "Membres · {}",
-                            thread.participants.len()
-                        ))),
+                        .child(ts!(
+                            "conversation.members.title",
+                            count = thread.participants.len()
+                        )),
                 )
                 .children(rows)
                 .into_any_element(),

@@ -157,7 +157,7 @@ impl MissiveApp {
                             .child(
                                 Button::new("menu-confirm-cancel")
                                     .ghost()
-                                    .label("Annuler")
+                                    .label(t!("message_dialogs.cancel"))
                                     .on_click(
                                         cx.listener(|this, _, _, cx| this.menu_cancel_confirm(cx)),
                                     ),
@@ -176,7 +176,7 @@ impl MissiveApp {
                 menu_item(
                     "menu-reminder-back",
                     IconName::ChevronLeft,
-                    "Me le rappeler",
+                    t!("message_dialogs.menu.remind_me"),
                     false,
                     p,
                 )
@@ -207,7 +207,7 @@ impl MissiveApp {
                 menu_item(
                     "menu-reminder-pick",
                     IconName::CalendarClock,
-                    "Choisir…",
+                    t!("message_dialogs.menu.pick_time"),
                     false,
                     p,
                 )
@@ -219,7 +219,7 @@ impl MissiveApp {
         } else {
             let target = message.clone();
             items.push(
-                menu_item("menu-reply", IconName::Reply, "Répondre", false, p)
+                menu_item("menu-reply", IconName::Reply, t!("message_dialogs.menu.reply"), false, p)
                     .on_click(cx.listener(move |this, _, window, cx| {
                         this.message_ops.menu = None;
                         this.start_reply(target.clone(), window, cx);
@@ -228,7 +228,7 @@ impl MissiveApp {
             );
             let target = message.id.clone();
             items.push(
-                menu_item("menu-react", IconName::Heart, "Réagir", false, p)
+                menu_item("menu-react", IconName::Heart, t!("message_dialogs.menu.react"), false, p)
                     .on_click(cx.listener(move |this, _, _, cx| {
                         this.message_ops.menu = None;
                         this.react_picker = None;
@@ -244,7 +244,13 @@ impl MissiveApp {
             if has_text {
                 let target = message.clone();
                 items.push(
-                    menu_item("menu-copy", IconName::Copy, "Copier le texte", false, p)
+                    menu_item(
+                        "menu-copy",
+                        IconName::Copy,
+                        t!("message_dialogs.menu.copy_text"),
+                        false,
+                        p,
+                    )
                         .on_click(
                             cx.listener(move |this, _, _, cx| this.copy_message_text(&target, cx)),
                         )
@@ -254,7 +260,13 @@ impl MissiveApp {
             if self.can_forward(&message) {
                 let target = message.clone();
                 items.push(
-                    menu_item("menu-forward", IconName::Forward, "Transférer", false, p)
+                    menu_item(
+                        "menu-forward",
+                        IconName::Forward,
+                        t!("message_dialogs.menu.forward"),
+                        false,
+                        p,
+                    )
                         .on_click(cx.listener(move |this, _, window, cx| {
                             this.open_forward(target.clone(), window, cx)
                         }))
@@ -264,7 +276,13 @@ impl MissiveApp {
             if self.can_edit(&message) {
                 let target = message.clone();
                 items.push(
-                    menu_item("menu-edit", IconName::Pencil, "Modifier", false, p)
+                    menu_item(
+                        "menu-edit",
+                        IconName::Pencil,
+                        t!("message_dialogs.menu.edit"),
+                        false,
+                        p,
+                    )
                         .on_click(cx.listener(move |this, _, window, cx| {
                             this.start_edit(target.clone(), window, cx)
                         }))
@@ -279,7 +297,10 @@ impl MissiveApp {
                             menu_item(
                                 "menu-reminder-cancel",
                                 IconName::AlarmClockOff,
-                                format!("Annuler le rappel ({})", self.planner_when(reminder.due_ms)),
+                                t!(
+                                    "message_dialogs.menu.cancel_reminder",
+                                    when = self.planner_when(reminder.due_ms)
+                                ),
                                 false,
                                 p,
                             )
@@ -293,7 +314,7 @@ impl MissiveApp {
                         menu_item(
                             "menu-reminder-open",
                             IconName::AlarmClock,
-                            "Me le rappeler",
+                            t!("message_dialogs.menu.remind_me"),
                             false,
                             p,
                         )
@@ -320,9 +341,9 @@ impl MissiveApp {
                             IconName::Star
                         },
                         if favorite {
-                            "Retirer des favoris"
+                            t!("message_dialogs.menu.remove_favorite")
                         } else {
-                            "Ajouter aux favoris"
+                            t!("message_dialogs.menu.add_favorite")
                         },
                         false,
                         p,
@@ -347,7 +368,7 @@ impl MissiveApp {
                     menu_item(
                         "menu-unsend",
                         IconName::Undo2,
-                        "Retirer pour tout le monde",
+                        t!("message_dialogs.menu.unsend"),
                         true,
                         p,
                     )
@@ -360,7 +381,7 @@ impl MissiveApp {
                     menu_item(
                         "menu-delete",
                         IconName::Trash,
-                        "Supprimer pour moi",
+                        t!("message_dialogs.menu.delete_for_me"),
                         true,
                         p,
                     )
@@ -437,6 +458,8 @@ impl MissiveApp {
             .collect();
         delivered.sort_by_key(|r| r.delivered_ms.unwrap_or_default());
 
+        let seen_verb = t!("message_dialogs.seen_by.verb_seen");
+        let delivered_verb = t!("message_dialogs.seen_by.verb_delivered");
         let row = |receipt: &ReadReceipt, at: i64, verb: &str| {
             h_flex()
                 .px_3()
@@ -456,7 +479,7 @@ impl MissiveApp {
                         .text_size(px(13.5))
                         .font_weight(FontWeight::SEMIBOLD)
                         .child(SharedString::from(if receipt.name.is_empty() {
-                            "Participant".to_string()
+                            t!("message_dialogs.seen_by.participant").into_owned()
                         } else {
                             receipt.name.clone()
                         })),
@@ -482,15 +505,23 @@ impl MissiveApp {
         };
         let mut rows: Vec<AnyElement> = Vec::new();
         if !read.is_empty() {
-            rows.push(section(format!("Vu · {}", read.len())));
-            rows.extend(read.iter().map(|r| row(r, r.read_ms, "Vu")));
+            rows.push(section(
+                t!("message_dialogs.seen_by.section_seen", count = read.len()).into_owned(),
+            ));
+            rows.extend(read.iter().map(|r| row(r, r.read_ms, &seen_verb)));
         }
         if !delivered.is_empty() {
-            rows.push(section(format!("Distribué · {}", delivered.len())));
+            rows.push(section(
+                t!(
+                    "message_dialogs.seen_by.section_delivered",
+                    count = delivered.len()
+                )
+                .into_owned(),
+            ));
             rows.extend(
                 delivered
                     .iter()
-                    .map(|r| row(r, r.delivered_ms.unwrap_or_default(), "Reçu")),
+                    .map(|r| row(r, r.delivered_ms.unwrap_or_default(), &delivered_verb)),
             );
         }
         if rows.is_empty() {
@@ -500,7 +531,7 @@ impl MissiveApp {
                     .text_center()
                     .text_size(px(13.))
                     .text_color(p.text_faint)
-                    .child("Personne n'a encore vu ce message.")
+                    .child(ts!("message_dialogs.seen_by.nobody"))
                     .into_any_element(),
             );
         }
@@ -513,7 +544,7 @@ impl MissiveApp {
                 .child(
                     dialog_card("seen-by", 380., p)
                         .child(dialog_header(
-                            "Vu par",
+                            t!("message_dialogs.seen_by.title"),
                             icon_button("close-seen-by", IconName::X, false, p)
                                 .on_click(cx.listener(|this, _, _, cx| this.close_seen_by(cx))),
                             p,
@@ -599,12 +630,12 @@ impl MissiveApp {
                     .text_center()
                     .text_size(px(13.))
                     .text_color(p.text_faint)
-                    .child("Aucune discussion")
+                    .child(ts!("message_dialogs.forward.no_results"))
                     .into_any_element(),
             );
         }
         let sender = if forward.message.is_outgoing {
-            "Vous".to_string()
+            t!("message_dialogs.forward.you").into_owned()
         } else {
             forward.message.sender_name.clone()
         };
@@ -618,7 +649,7 @@ impl MissiveApp {
                     dialog_card("forward", 460., p)
                         .h(px(560.))
                         .child(dialog_header(
-                            "Transférer",
+                            t!("message_dialogs.forward.title"),
                             icon_button("close-forward", IconName::X, false, p)
                                 .on_click(cx.listener(|this, _, _, cx| this.close_forward(cx))),
                             p,
@@ -694,15 +725,15 @@ impl MissiveApp {
                                         .text_size(px(12.5))
                                         .text_color(p.text_muted)
                                         .child(SharedString::from(match selected_count {
-                                            0 => "Choisissez jusqu'à 10 conversations".to_string(),
-                                            1 => "1 conversation".to_string(),
-                                            n => format!("{n} conversations"),
+                                            0 => t!("message_dialogs.forward.choose").into_owned(),
+                                            n => tn!("message_dialogs.forward.selected", n)
+                                                .into_owned(),
                                         })),
                                 )
                                 .child(
                                     Button::new("forward-cancel")
                                         .ghost()
-                                        .label("Annuler")
+                                        .label(t!("message_dialogs.cancel"))
                                         .on_click(
                                             cx.listener(|this, _, _, cx| this.close_forward(cx)),
                                         ),
@@ -710,7 +741,7 @@ impl MissiveApp {
                                 .child(
                                     Button::new("forward-send")
                                         .primary()
-                                        .label("Envoyer")
+                                        .label(t!("message_dialogs.forward.send"))
                                         .loading(forward.busy)
                                         .disabled(selected_count == 0)
                                         .on_click(
@@ -756,7 +787,7 @@ impl MissiveApp {
                 .child(
                     dialog_card("poll-dialog", 440., p)
                         .child(dialog_header(
-                            "Nouveau sondage",
+                            t!("message_dialogs.poll.title"),
                             icon_button("close-poll", IconName::X, false, p)
                                 .on_click(cx.listener(|this, _, _, cx| this.close_poll_dialog(cx))),
                             p,
@@ -778,7 +809,7 @@ impl MissiveApp {
                                                 .text_size(px(12.))
                                                 .font_weight(FontWeight::SEMIBOLD)
                                                 .text_color(p.text_muted)
-                                                .child("Question"),
+                                                .child(ts!("message_dialogs.poll.question")),
                                         )
                                         .child(Input::new(&poll.question)),
                                 )
@@ -790,7 +821,7 @@ impl MissiveApp {
                                                 .text_size(px(12.))
                                                 .font_weight(FontWeight::SEMIBOLD)
                                                 .text_color(p.text_muted)
-                                                .child("Options"),
+                                                .child(ts!("message_dialogs.poll.options")),
                                         )
                                         .children(options),
                                 )
@@ -804,7 +835,7 @@ impl MissiveApp {
                                             .text_color(accent)
                                             .cursor_pointer()
                                             .child(Icon::new(IconName::Plus).size(px(15.)))
-                                            .child("Ajouter une option")
+                                            .child(ts!("message_dialogs.poll.add_option"))
                                             .on_click(cx.listener(|this, _, window, cx| {
                                                 this.add_poll_option(window, cx)
                                             })),
@@ -828,7 +859,7 @@ impl MissiveApp {
                                 .child(
                                     Button::new("poll-cancel")
                                         .ghost()
-                                        .label("Annuler")
+                                        .label(t!("message_dialogs.cancel"))
                                         .on_click(
                                             cx.listener(|this, _, _, cx| {
                                                 this.close_poll_dialog(cx)
@@ -838,7 +869,7 @@ impl MissiveApp {
                                 .child(
                                     Button::new("poll-create")
                                         .primary()
-                                        .label("Créer")
+                                        .label(t!("message_dialogs.poll.create"))
                                         .loading(poll.busy)
                                         .disabled(!ready)
                                         .on_click(
@@ -865,11 +896,11 @@ impl MissiveApp {
             .and_then(|list| list.iter().find(|m| m.id == pinned_id));
         let text: Option<String> = pinned.map(|message| {
             if message.deleted {
-                "Message retiré".to_string()
+                t!("message_dialogs.pinned.removed").into_owned()
             } else {
                 let body = summary(message);
                 if body.is_empty() {
-                    "Message".to_string()
+                    t!("message_dialogs.pinned.message").into_owned()
                 } else {
                     body
                 }
@@ -894,7 +925,11 @@ impl MissiveApp {
                 div()
                     .flex_none()
                     .font_weight(FontWeight::BOLD)
-                    .child(if loaded { "Épinglé" } else { "Message épinglé" }),
+                    .child(if loaded {
+                        ts!("message_dialogs.pinned.label_short")
+                    } else {
+                        ts!("message_dialogs.pinned.label_long")
+                    }),
             )
             .child(
                 div()
@@ -903,7 +938,7 @@ impl MissiveApp {
                     .truncate()
                     .when(!loaded, |el| el.opacity(0.75))
                     .child(SharedString::from(
-                        text.unwrap_or_else(|| "Afficher".to_string()),
+                        text.unwrap_or_else(|| t!("message_dialogs.pinned.show").into_owned()),
                     )),
             )
             .when(count > 1, |el| {
@@ -913,7 +948,7 @@ impl MissiveApp {
                         .text_size(px(12.))
                         .font_weight(FontWeight::SEMIBOLD)
                         .opacity(0.75)
-                        .child(SharedString::from(format!("{count} épinglés"))),
+                        .child(ts!("message_dialogs.pinned.count", count = count)),
                 )
             })
             .on_click(cx.listener(move |this, _, _, cx| {

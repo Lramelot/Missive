@@ -12,7 +12,7 @@ use super::message_dialogs::{dialog_card, dialog_header, menu_item, scrim};
 use super::widgets::{format_short, icon_button};
 use crate::{app::MissiveApp, style::Palette};
 
-fn field_label(text: &'static str, p: &Palette) -> Div {
+fn field_label(text: SharedString, p: &Palette) -> Div {
     div()
         .text_size(px(12.))
         .font_weight(FontWeight::SEMIBOLD)
@@ -20,7 +20,7 @@ fn field_label(text: &'static str, p: &Palette) -> Div {
         .child(text)
 }
 
-fn empty_state(text: &'static str, p: &Palette) -> AnyElement {
+fn empty_state(text: SharedString, p: &Palette) -> AnyElement {
     div()
         .py_8()
         .px_6()
@@ -84,7 +84,7 @@ impl MissiveApp {
                 .text_size(px(11.5))
                 .font_weight(FontWeight::BOLD)
                 .text_color(p.text_muted)
-                .child("Programmer l'envoi")
+                .child(ts!("planner_view.schedule_menu.title"))
                 .into_any_element(),
         ];
         for (index, (label, at)) in self.schedule_choices().into_iter().enumerate() {
@@ -100,7 +100,7 @@ impl MissiveApp {
             menu_item(
                 "schedule-pick",
                 IconName::CalendarClock,
-                "Choisir une date…",
+                t!("planner_view.schedule_menu.pick_date"),
                 false,
                 p,
             )
@@ -175,14 +175,14 @@ impl MissiveApp {
                                             v_flex()
                                                 .flex_1()
                                                 .gap_1p5()
-                                                .child(field_label("Date", p))
+                                                .child(field_label(ts!("planner_view.picker.date"), p))
                                                 .child(Input::new(&picker.date)),
                                         )
                                         .child(
                                             v_flex()
                                                 .w(px(110.))
                                                 .gap_1p5()
-                                                .child(field_label("Heure", p))
+                                                .child(field_label(ts!("planner_view.picker.time"), p))
                                                 .child(Input::new(&picker.time)),
                                         ),
                                 )
@@ -190,7 +190,7 @@ impl MissiveApp {
                                     div()
                                         .text_size(px(12.))
                                         .text_color(p.text_faint)
-                                        .child("Dans l'année qui vient, à l'heure de cet ordinateur."),
+                                        .child(ts!("planner_view.picker.hint")),
                                 )
                                 .when_some(picker.error.clone(), |el, error| {
                                     el.child(
@@ -210,7 +210,7 @@ impl MissiveApp {
                                 .child(
                                     Button::new("date-picker-cancel")
                                         .ghost()
-                                        .label("Annuler")
+                                        .label(t!("planner_view.picker.cancel"))
                                         .on_click(cx.listener(|this, _, _, cx| this.close_picker(cx))),
                                 )
                                 .child(
@@ -254,7 +254,7 @@ impl MissiveApp {
                     dialog_card("planner-list", 520., p)
                         .h(px(560.))
                         .child(dialog_header(
-                            "Planification",
+                            t!("planner_view.list.title"),
                             icon_button("close-planner", IconName::X, false, p)
                                 .on_click(cx.listener(|this, _, _, cx| this.close_planner_list(cx))),
                             p,
@@ -268,7 +268,7 @@ impl MissiveApp {
                                 .child(
                                     tab(
                                         "planner-tab-scheduled",
-                                        label("Messages programmés", scheduled_count),
+                                        label(&t!("planner_view.list.tab_scheduled"), scheduled_count),
                                         !reminders_tab,
                                         p,
                                     )
@@ -279,7 +279,7 @@ impl MissiveApp {
                                 .child(
                                     tab(
                                         "planner-tab-reminders",
-                                        label("Rappels", reminder_count),
+                                        label(&t!("planner_view.list.tab_reminders"), reminder_count),
                                         reminders_tab,
                                         p,
                                     )
@@ -307,10 +307,7 @@ impl MissiveApp {
     fn scheduled_rows(&self, p: &Palette, cx: &mut Context<Self>) -> Vec<AnyElement> {
         let items = self.planner.sorted_scheduled();
         if items.is_empty() {
-            return vec![empty_state(
-                "Aucun message programmé. Écrivez un message puis utilisez l'horloge à côté du bouton d'envoi.",
-                p,
-            )];
+            return vec![empty_state(ts!("planner_view.scheduled.empty"), p)];
         }
         let hover = p.hover;
         items
@@ -319,11 +316,19 @@ impl MissiveApp {
             .map(|(index, item)| {
                 let alert = item.needs_decision();
                 let when = if item.sending {
-                    "Envoi en cours…".to_string()
+                    t!("planner_view.scheduled.sending").to_string()
                 } else if item.failure.is_some() {
-                    format!("Non envoyé · prévu {}", self.planner_when(item.send_at_ms))
+                    t!(
+                        "planner_view.scheduled.not_sent",
+                        when = self.planner_when(item.send_at_ms)
+                    )
+                    .to_string()
                 } else if item.overdue {
-                    format!("En retard · prévu {}", self.planner_when(item.send_at_ms))
+                    t!(
+                        "planner_view.scheduled.late",
+                        when = self.planner_when(item.send_at_ms)
+                    )
+                    .to_string()
                 } else {
                     self.planner_when_title(item.send_at_ms)
                 };
@@ -338,7 +343,7 @@ impl MissiveApp {
                             Button::new(("scheduled-edit", index))
                                 .ghost()
                                 .small()
-                                .label("Modifier l'heure")
+                                .label(t!("planner_view.scheduled.change_time"))
                                 .on_click(cx.listener(move |this, _, window, cx| {
                                     this.open_reschedule_picker(edit_id.clone(), window, cx)
                                 })),
@@ -349,7 +354,7 @@ impl MissiveApp {
                             Button::new(("scheduled-delete", index))
                                 .ghost()
                                 .small()
-                                .label("Supprimer")
+                                .label(t!("planner_view.delete"))
                                 .on_click(cx.listener(move |this, _, _, cx| {
                                     this.delete_scheduled(&delete_id, cx)
                                 })),
@@ -360,9 +365,9 @@ impl MissiveApp {
                                 .when(!alert, |b| b.outline())
                                 .small()
                                 .label(if item.failure.is_some() {
-                                    "Réessayer"
+                                    t!("planner_view.scheduled.retry")
                                 } else {
-                                    "Envoyer maintenant"
+                                    t!("planner_view.scheduled.send_now")
                                 })
                                 .on_click(cx.listener(move |this, _, _, cx| {
                                     this.send_scheduled_now(&send_id, cx)
@@ -392,7 +397,7 @@ impl MissiveApp {
                                     .text_size(px(13.5))
                                     .font_weight(FontWeight::SEMIBOLD)
                                     .child(SharedString::from(if item.thread_name.is_empty() {
-                                        "Conversation".to_string()
+                                        t!("planner_view.conversation_fallback").to_string()
                                     } else {
                                         item.thread_name.clone()
                                     })),
@@ -440,10 +445,7 @@ impl MissiveApp {
     fn reminder_rows(&self, p: &Palette, cx: &mut Context<Self>) -> Vec<AnyElement> {
         let items = self.planner.sorted_reminders();
         if items.is_empty() {
-            return vec![empty_state(
-                "Aucun rappel. Utilisez « Me le rappeler » dans le menu d'un message.",
-                p,
-            )];
+            return vec![empty_state(ts!("planner_view.reminders.empty"), p)];
         }
         let hover = p.hover;
         items
@@ -452,7 +454,11 @@ impl MissiveApp {
             .map(|(index, reminder)| {
                 let fired = reminder.fired_ms.is_some();
                 let when = if fired {
-                    format!("Rappelé {}", self.planner_when(reminder.fired_ms.unwrap_or(reminder.due_ms)))
+                    t!(
+                        "planner_view.reminders.fired",
+                        when = self.planner_when(reminder.fired_ms.unwrap_or(reminder.due_ms))
+                    )
+                    .to_string()
                 } else {
                     self.planner_when_title(reminder.due_ms)
                 };
@@ -468,7 +474,7 @@ impl MissiveApp {
                             Button::new(("reminder-done", index))
                                 .ghost()
                                 .small()
-                                .label("Terminé")
+                                .label(t!("planner_view.reminders.done"))
                                 .on_click(cx.listener(move |this, _, _, cx| {
                                     this.delete_reminder(&first_id, cx)
                                 })),
@@ -477,7 +483,7 @@ impl MissiveApp {
                             Button::new(("reminder-snooze", index))
                                 .outline()
                                 .small()
-                                .label("Reporter d'1 h")
+                                .label(t!("planner_view.reminders.snooze"))
                                 .on_click(cx.listener(move |this, _, _, cx| {
                                     this.snooze_reminder(&second_id, cx)
                                 })),
@@ -490,7 +496,7 @@ impl MissiveApp {
                             Button::new(("reminder-edit", index))
                                 .ghost()
                                 .small()
-                                .label("Modifier")
+                                .label(t!("planner_view.reminders.edit"))
                                 .on_click(cx.listener(move |this, _, window, cx| {
                                     this.open_move_reminder_picker(first_id.clone(), window, cx)
                                 })),
@@ -499,7 +505,7 @@ impl MissiveApp {
                             Button::new(("reminder-delete", index))
                                 .ghost()
                                 .small()
-                                .label("Supprimer")
+                                .label(t!("planner_view.delete"))
                                 .on_click(cx.listener(move |this, _, _, cx| {
                                     this.delete_reminder(&second_id, cx)
                                 })),
@@ -537,7 +543,8 @@ impl MissiveApp {
                                             .font_weight(FontWeight::SEMIBOLD)
                                             .child(SharedString::from(
                                                 if reminder.thread_name.is_empty() {
-                                                    "Conversation".to_string()
+                                                    t!("planner_view.conversation_fallback")
+                                                        .to_string()
                                                 } else {
                                                     reminder.thread_name.clone()
                                                 },
@@ -591,7 +598,7 @@ impl MissiveApp {
             let remove_id = favorite.message_id.clone();
             let body = if favorite.text.is_empty() {
                 if favorite.kind.is_empty() {
-                    "Message".to_string()
+                    t!("planner_view.favorites.message_fallback").to_string()
                 } else {
                     favorite.kind.clone()
                 }
@@ -673,9 +680,9 @@ impl MissiveApp {
         if rows.is_empty() {
             rows.push(empty_state(
                 if total == 0 {
-                    "Aucun favori. Utilisez « Ajouter aux favoris » dans le menu d'un message ; ils restent sur cet ordinateur."
+                    ts!("planner_view.favorites.empty")
                 } else {
-                    "Aucun favori ne correspond à la recherche."
+                    ts!("planner_view.favorites.no_match")
                 },
                 p,
             ));
@@ -690,7 +697,7 @@ impl MissiveApp {
                     dialog_card("favorites", 500., p)
                         .h(px(580.))
                         .child(dialog_header(
-                            "Favoris",
+                            t!("planner_view.favorites.title"),
                             icon_button("close-favorites", IconName::X, false, p)
                                 .on_click(cx.listener(|this, _, _, cx| this.close_favorites(cx))),
                             p,

@@ -1,0 +1,70 @@
+_version: 2
+desktop:
+  tray:
+    open:
+      en: "Open Missive"
+      fr: "Ouvrir Missive"
+    quit:
+      en: "Quit"
+      fr: "Quitter"
+    tooltip_unread:
+      one:
+        en: "Missive · %{count} unread message"
+        fr: "Missive · %{count} message non lu"
+      other:
+        en: "Missive · %{count} unread messages"
+        fr: "Missive · %{count} messages non lus"
+  taskbar:
+    unread_badge:
+      en: "%{text} unread"
+      fr: "%{text} non lus"
+notifications:
+  toast:
+    reply_placeholder:
+      en: "Reply…"
+      fr: "Répondre…"
+    send:
+      en: "Send"
+      fr: "Envoyer"
+    mark_read:
+      en: "Mark as read"
+      fr: "Marquer comme lu"
+login:
+  title:
+    en: "Sign in to Messenger"
+    fr: "Connexion à Messenger"
+  instructions:
+    en: "Sign in to Messenger here. Missive picks up the session automatically; your password stays on this page."
+    fr: "Connecte-toi à Messenger ici. Missive récupère la session automatiquement ; ton mot de passe reste dans cette page."
+  opening:
+    en: "Opening Messenger…"
+    fr: "Ouverture de Messenger…"
+  webview_unavailable:
+    en: "Built-in browser unavailable: %{error}"
+    fr: "Navigateur intégré indisponible : %{error}"
+  window_failed:
+    en: "Could not open the sign-in window: %{error}"
+    fr: "Fenêtre de connexion impossible : %{error}"
+diagnostics:
+  report:
+    header:
+      en: "Missive diagnostics\nGenerated on: %{generated}\nVersion: %{version}%{installation}\nSystem: %{system}\nDemo mode: %{demo}\nConnection: %{link}"
+      fr: "Diagnostic Missive\nGénéré le : %{generated}\nVersion : %{version}%{installation}\nSystème : %{system}\nMode démo : %{demo}\nConnexion : %{link}"
+    not_installed:
+      en: "(not installed)"
+      fr: "(hors installation)"
+    bridge_title:
+      en: "Bridge:"
+      fr: "Pont :"
+    bridge_unavailable:
+      en: "unavailable (%{reason})"
+      fr: "indisponible (%{reason})"
+    log_title:
+      en: "Log (last %{count} lines):"
+      fr: "Journal (%{count} dernières lignes) :"
+    "yes":
+      en: "yes"
+      fr: "oui"
+    "no":
+      en: "no"
+      fr: "non"

@@ -1,0 +1,366 @@
+_version: 2
+app:
+  composer:
+    placeholder:
+      en: "Write a message"
+      fr: "Écrire un message"
+  search:
+    placeholder:
+      en: "Search"
+      fr: "Rechercher"
+  pin:
+    placeholder:
+      en: "6-digit PIN"
+      fr: "PIN à 6 chiffres"
+    six_digits:
+      en: "The PIN is exactly 6 digits."
+      fr: "Le PIN compte exactement 6 chiffres."
+    wrong_with_attempts:
+      en: "Incorrect PIN. %{attempts} attempt(s) left before Meta locks it."
+      fr: "PIN incorrect. Il reste %{attempts} essai(s) avant blocage par Meta."
+    wrong:
+      en: "Incorrect PIN."
+      fr: "PIN incorrect."
+    locked:
+      en: "Too many attempts: Meta has blocked PIN restore for this account."
+      fr: "Trop d'essais : Meta a bloqué la restauration par PIN pour ce compte."
+    no_backup:
+      en: "No encrypted backup exists for this account."
+      fr: "Aucune sauvegarde chiffrée n'existe pour ce compte."
+  login:
+    cookies_required:
+      en: "All three cookies are required."
+      fr: "Les trois cookies sont nécessaires."
+    session_rejected:
+      en: "Session expired or rejected by Meta: %{detail}"
+      fr: "Session expirée ou refusée par Meta : %{detail}"
+  fatal:
+    bridge_stopped:
+      en: "The Messenger bridge has stopped."
+      fr: "Le bridge Messenger s'est arrêté."
+  notification:
+    new_message:
+      en: "New message"
+      fr: "Nouveau message"
+    group_body:
+      en: "%{sender}: %{text}"
+      fr: "%{sender} : %{text}"
+    someone:
+      en: "Someone"
+      fr: "Quelqu'un"
+    new_reaction:
+      en: "New reaction to your message"
+      fr: "Nouvelle réaction à votre message"
+    reacted:
+      en: "%{actor} reacted %{emoji} to your message"
+      fr: "%{actor} a réagi %{emoji} à votre message"
+    reacted_quote:
+      en: "%{actor} reacted %{emoji} to your message: “%{preview}”"
+      fr: "%{actor} a réagi %{emoji} à votre message : « %{preview} »"
+  presence:
+    online:
+      en: "Online"
+      fr: "En ligne"
+    people_online:
+      one:
+        en: "%{count} person online"
+        fr: "%{count} personne en ligne"
+      other:
+        en: "%{count} people online"
+        fr: "%{count} personnes en ligne"
+    active_now:
+      en: "Active now"
+      fr: "Actif à l'instant"
+    active_minutes:
+      en: "Active %{minutes}m ago"
+      fr: "Actif il y a %{minutes} min"
+    active_hours:
+      en: "Active %{hours}h ago"
+      fr: "Actif il y a %{hours} h"
+    active_yesterday:
+      en: "Active yesterday"
+      fr: "Actif hier"
+    active_days:
+      en: "Active %{days}d ago"
+      fr: "Actif il y a %{days} j"
+  error:
+    unsupported_action:
+      en: "Messenger doesn't allow this action in this conversation."
+      fr: "Messenger ne permet pas cette action dans cette conversation."
+    not_found:
+      en: "Item not found. It may have been deleted."
+      fr: "Élément introuvable, il a peut-être été supprimé."
+  preview:
+    outgoing:
+      en: "You: %{body}"
+      fr: "Vous : %{body}"
+  attachment:
+    photo:
+      en: "Photo"
+      fr: "Photo"
+    video:
+      en: "Video"
+      fr: "Vidéo"
+    voice:
+      en: "Voice message"
+      fr: "Message vocal"
+    sticker:
+      en: "Sticker"
+      fr: "Sticker"
+    link:
+      en: "Link"
+      fr: "Lien"
+    file:
+      en: "File"
+      fr: "Fichier"
+    other:
+      en: "Attachment"
+      fr: "Pièce jointe"
+planner:
+  thread_gone:
+    en: "Conversation not found"
+    fr: "Conversation introuvable"
+  failure:
+    unconfirmed:
+      en: "Sending not confirmed: check the conversation before trying again"
+      fr: "Envoi non confirmé : vérifiez la conversation avant de réessayer"
+  preset:
+    tonight:
+      en: "Tonight at 20:00"
+      fr: "Ce soir à 20:00"
+    tomorrow_morning:
+      en: "Tomorrow at 8:00"
+      fr: "Demain à 8:00"
+    monday:
+      en: "Monday at 9:00"
+      fr: "Lundi à 9:00"
+    in_one_hour:
+      en: "In 1 hour"
+      fr: "Dans 1 h"
+    tomorrow_nine:
+      en: "Tomorrow at 9:00"
+      fr: "Demain à 9:00"
+  when:
+    today:
+      en: "today at %{clock}"
+      fr: "aujourd'hui à %{clock}"
+    tomorrow:
+      en: "tomorrow at %{clock}"
+      fr: "demain à %{clock}"
+    yesterday:
+      en: "yesterday at %{clock}"
+      fr: "hier à %{clock}"
+    weekday:
+      en: "%{weekday} at %{clock}"
+      fr: "%{weekday} à %{clock}"
+    date:
+      en: "%{month} %{day} at %{clock}"
+      fr: "le %{day} %{month} à %{clock}"
+    date_year:
+      en: "%{month} %{day}, %{year} at %{clock}"
+      fr: "le %{day} %{month} %{year} à %{clock}"
+  picker:
+    invalid_date:
+      en: "Invalid date: use DD/MM/YYYY."
+      fr: "Date invalide : utilisez JJ/MM/AAAA."
+    invalid_time:
+      en: "Invalid time: use HH:MM."
+      fr: "Heure invalide : utilisez HH:MM."
+    in_the_past:
+      en: "Pick a time in the future."
+      fr: "Choisissez un moment dans le futur."
+    too_far:
+      en: "Pick a date within the next year."
+      fr: "Choisissez une date dans moins d'un an."
+    date_placeholder:
+      en: "DD/MM/YYYY"
+      fr: "JJ/MM/AAAA"
+    time_placeholder:
+      en: "HH:MM"
+      fr: "HH:MM"
+    title_schedule:
+      en: "Schedule send"
+      fr: "Programmer l'envoi"
+    title_remind:
+      en: "Remind me"
+      fr: "Me le rappeler"
+    title_reschedule:
+      en: "Change send time"
+      fr: "Modifier l'heure d'envoi"
+    title_move_reminder:
+      en: "Edit reminder"
+      fr: "Modifier le rappel"
+    confirm_schedule:
+      en: "Schedule"
+      fr: "Programmer"
+    confirm_remind:
+      en: "Create reminder"
+      fr: "Créer le rappel"
+    confirm_save:
+      en: "Save"
+      fr: "Enregistrer"
+  toast:
+    late:
+      en: "A scheduled message couldn't go out on time: it's waiting for your decision"
+      fr: "Un message programmé n'a pas pu partir à l'heure : il attend votre décision"
+    sent:
+      en: "Scheduled message sent to %{name}"
+      fr: "Message programmé envoyé à %{name}"
+    not_sent:
+      en: "Scheduled message to %{name} not sent"
+      fr: "Message programmé non envoyé à %{name}"
+    scheduled:
+      en: "Message scheduled for %{when}"
+      fr: "Message programmé %{when}"
+    already_sent:
+      en: "This message has already been sent"
+      fr: "Ce message a déjà été envoyé"
+    sending:
+      en: "This message is being sent"
+      fr: "Ce message est en cours d'envoi"
+    waiting_for_connection:
+      en: "The message will go out as soon as the connection is back"
+      fr: "Le message partira dès le retour de la connexion"
+  notification:
+    body:
+      en: "%{name}: %{text}"
+      fr: "%{name} : %{text}"
+    open_to_retry:
+      en: "Open Missive to resend or delete it"
+      fr: "Ouvrez Missive pour le renvoyer ou le supprimer"
+    not_sent_title:
+      en: "Scheduled message not sent"
+      fr: "Message programmé non envoyé"
+  reminder:
+    title:
+      en: "Reminder"
+      fr: "Rappel"
+    notification_hidden:
+      en: "You asked to be reminded about a message"
+      fr: "Vous avez demandé un rappel pour un message"
+    notification_in_thread:
+      en: "Message in %{name}"
+      fr: "Message dans %{name}"
+    toast:
+      en: "Reminder · %{name}"
+      fr: "Rappel · %{name}"
+    toast_preview:
+      en: "Reminder · %{name}: %{preview}"
+      fr: "Rappel · %{name} : %{preview}"
+    preview:
+      en: "%{sender}: %{text}"
+      fr: "%{sender} : %{text}"
+    set:
+      en: "Reminder set for %{when}"
+      fr: "Rappel prévu %{when}"
+    cancelled:
+      en: "Reminder cancelled"
+      fr: "Rappel annulé"
+  favorites:
+    search_placeholder:
+      en: "Search favorites"
+      fr: "Rechercher dans les favoris"
+    removed:
+      en: "Removed from favorites"
+      fr: "Retiré des favoris"
+    added:
+      en: "Added to favorites"
+      fr: "Ajouté aux favoris"
+    you:
+      en: "You"
+      fr: "Vous"
+  draft:
+    no_attachments:
+      en: "Attachments can't be scheduled"
+      fr: "Les pièces jointes ne peuvent pas être programmées"
+    empty:
+      en: "Write the message to schedule first"
+      fr: "Écrivez d'abord le message à programmer"
+planner_view:
+  schedule_menu:
+    title:
+      en: "Schedule send"
+      fr: "Programmer l'envoi"
+    pick_date:
+      en: "Pick a date…"
+      fr: "Choisir une date…"
+  picker:
+    date:
+      en: "Date"
+      fr: "Date"
+    time:
+      en: "Time"
+      fr: "Heure"
+    hint:
+      en: "Within the next year, in this computer's time zone."
+      fr: "Dans l'année qui vient, à l'heure de cet ordinateur."
+    cancel:
+      en: "Cancel"
+      fr: "Annuler"
+  list:
+    title:
+      en: "Planner"
+      fr: "Planification"
+    tab_scheduled:
+      en: "Scheduled messages"
+      fr: "Messages programmés"
+    tab_reminders:
+      en: "Reminders"
+      fr: "Rappels"
+  delete:
+    en: "Delete"
+    fr: "Supprimer"
+  conversation_fallback:
+    en: "Conversation"
+    fr: "Conversation"
+  scheduled:
+    empty:
+      en: "No scheduled messages. Write a message, then use the clock next to the send button."
+      fr: "Aucun message programmé. Écrivez un message puis utilisez l'horloge à côté du bouton d'envoi."
+    sending:
+      en: "Sending…"
+      fr: "Envoi en cours…"
+    not_sent:
+      en: "Not sent · due %{when}"
+      fr: "Non envoyé · prévu %{when}"
+    late:
+      en: "Late · due %{when}"
+      fr: "En retard · prévu %{when}"
+    change_time:
+      en: "Change time"
+      fr: "Modifier l'heure"
+    retry:
+      en: "Retry"
+      fr: "Réessayer"
+    send_now:
+      en: "Send now"
+      fr: "Envoyer maintenant"
+  reminders:
+    empty:
+      en: "No reminders. Use “Remind me” in a message's menu."
+      fr: "Aucun rappel. Utilisez « Me le rappeler » dans le menu d'un message."
+    fired:
+      en: "Reminded %{when}"
+      fr: "Rappelé %{when}"
+    done:
+      en: "Done"
+      fr: "Terminé"
+    snooze:
+      en: "Snooze 1 hour"
+      fr: "Reporter d'1 h"
+    edit:
+      en: "Edit"
+      fr: "Modifier"
+  favorites:
+    message_fallback:
+      en: "Message"
+      fr: "Message"
+    empty:
+      en: "No favorites. Use “Add to favorites” in a message's menu; they stay on this computer."
+      fr: "Aucun favori. Utilisez « Ajouter aux favoris » dans le menu d'un message ; ils restent sur cet ordinateur."
+    no_match:
+      en: "No favorites match your search."
+      fr: "Aucun favori ne correspond à la recherche."
+    title:
+      en: "Favorites"
+      fr: "Favoris"

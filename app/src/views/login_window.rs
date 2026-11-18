@@ -147,7 +147,7 @@ impl LoginWindow {
             Err(err) => {
                 return Self {
                     webview: None,
-                    error: Some(format!("Navigateur intégré indisponible : {err}").into()),
+                    error: Some(ts!("login.webview_unavailable", error = err)),
                     _context: None,
                     _task: Task::ready(()),
                 };
@@ -179,8 +179,7 @@ impl LoginWindow {
                         Some(source)
                     }
                     Err(err) => {
-                        this.error =
-                            Some(format!("Navigateur intégré indisponible : {err}").into());
+                        this.error = Some(ts!("login.webview_unavailable", error = err));
                         cx.notify();
                         None
                     }
@@ -239,7 +238,7 @@ impl Render for LoginWindow {
                 .child(
                     error
                         .clone()
-                        .unwrap_or_else(|| "Ouverture de Messenger…".into()),
+                        .unwrap_or_else(|| ts!("login.opening")),
                 )
                 .into_any_element(),
         };
@@ -258,7 +257,7 @@ impl Render for LoginWindow {
                             div()
                                 .text_size(px(13.))
                                 .font_weight(FontWeight::BOLD)
-                                .child("Connexion à Messenger"),
+                                .child(ts!("login.title")),
                         ),
                 ),
             )
@@ -273,7 +272,7 @@ impl Render for LoginWindow {
                     .border_color(p.divider)
                     .text_size(px(12.5))
                     .text_color(p.text_muted)
-                    .child("Connecte-toi à Messenger ici. Missive récupère la session automatiquement ; ton mot de passe reste dans cette page."),
+                    .child(ts!("login.instructions")),
             )
             .child(body)
     }
@@ -293,8 +292,7 @@ impl MissiveApp {
                 cx.new(|cx| LoginWindow::new(app, window, cx))
             }) {
                 owner.update(cx, |this, cx| {
-                    this.login_error =
-                        Some(format!("Fenêtre de connexion impossible : {err:#}").into());
+                    this.login_error = Some(ts!("login.window_failed", error = format!("{err:#}")));
                     cx.notify();
                 });
             }

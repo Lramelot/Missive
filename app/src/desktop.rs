@@ -10,7 +10,17 @@ pub struct Tray {
     icon: tray_icon::TrayIcon,
     open_id: tray_icon::menu::MenuId,
     quit_id: tray_icon::menu::MenuId,
+    open_item: tray_icon::menu::MenuItem,
+    quit_item: tray_icon::menu::MenuItem,
     unread: u32,
+}
+
+fn tooltip(unread: u32) -> String {
+    if unread == 0 {
+        "Missive".to_string()
+    } else {
+        tn!("desktop.tray.tooltip_unread", unread).into_owned()
+    }
 }
 
 const ICON_SIZE: u32 = 32;
@@ -25,8 +35,8 @@ impl Tray {
         use tray_icon::menu::{Menu, MenuItem, PredefinedMenuItem};
 
         let menu = Menu::new();
-        let open = MenuItem::new("Ouvrir Missive", true, None);
-        let quit = MenuItem::new("Quitter", true, None);
+        let open = MenuItem::new(t!("desktop.tray.open"), true, None);
+        let quit = MenuItem::new(t!("desktop.tray.quit"), true, None);
         menu.append_items(&[&open, &PredefinedMenuItem::separator(), &quit])
             .ok()?;
         let icon = tray_icon::TrayIconBuilder::new()
@@ -41,8 +51,16 @@ impl Tray {
             icon,
             open_id: open.id().clone(),
             quit_id: quit.id().clone(),
+            open_item: open,
+            quit_item: quit,
             unread: 0,
         })
+    }
+
+    pub fn refresh_language(&self) {
+        self.open_item.set_text(t!("desktop.tray.open"));
+        self.quit_item.set_text(t!("desktop.tray.quit"));
+        let _ = self.icon.set_tooltip(Some(tooltip(self.unread)));
     }
 
     pub fn poll(&self) -> Vec<TrayAction> {
@@ -73,12 +91,7 @@ impl Tray {
         }
         let previous = self.unread;
         self.unread = unread;
-        let tooltip = match unread {
-            0 => "Missive".to_string(),
-            1 => "Missive · 1 message non lu".to_string(),
-            n => format!("Missive · {n} messages non lus"),
-        };
-        let _ = self.icon.set_tooltip(Some(tooltip));
+        let _ = self.icon.set_tooltip(Some(tooltip(unread)));
         let label = |count: u32| (count > 0).then(|| crate::logo::badge_label(count));
         if label(previous) != label(unread) {
             let _ = self.icon.set_icon(icon(unread));
@@ -147,7 +160,7 @@ pub fn set_taskbar_badge(window: &Window, unread: u32) {
                 if raw.is_null() {
                     return;
                 }
-                let description: Vec<u16> = format!("{text} non lus")
+                let description: Vec<u16> = t!("desktop.taskbar.unread_badge", text = text).into_owned()
                     .encode_utf16()
                     .chain(std::iter::once(0))
                     .collect();

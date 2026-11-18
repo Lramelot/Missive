@@ -217,7 +217,7 @@ impl MissiveApp {
                         }
                         this.voice.unavailable.insert(key);
                         this.show_toast(
-                            format!("Message vocal indisponible. {}", action_error(&err)),
+                            t!("voice.error.unavailable", reason = action_error(&err)),
                             cx,
                         );
                     }
@@ -235,7 +235,7 @@ impl MissiveApp {
                 Err(err) => {
                     eprintln!("[voice] audio thread failed: {err:#}");
                     self.voice.playback = None;
-                    self.show_toast("Lecture audio impossible", cx);
+                    self.show_toast(t!("voice.error.playback_failed"), cx);
                     return;
                 }
             }
@@ -287,7 +287,7 @@ impl MissiveApp {
 
     fn voice_tick(&mut self, cx: &mut Context<Self>) -> bool {
         let mut active = false;
-        let mut message: Option<&'static str> = None;
+        let mut message: Option<SharedString> = None;
         let status = self.voice.player.as_ref().map(AudioPlayer::status);
         if let Some(playback) = self.voice.playback.as_mut() {
             if let Some(status) = status.filter(|status| {
@@ -301,9 +301,9 @@ impl MissiveApp {
                 if status.finished {
                     if status.undecodable {
                         self.voice.undecodable.insert(playback.key.clone());
-                        message = Some("Format audio non pris en charge : utilisez « Ouvrir ».");
+                        message = Some(ts!("voice.error.unsupported_format"));
                     } else if status.no_device {
-                        message = Some("Sortie audio indisponible");
+                        message = Some(ts!("voice.error.no_output_device"));
                     }
                     self.voice.playback = None;
                 } else {
@@ -383,7 +383,7 @@ impl MissiveApp {
                         }
                         if current.is_some() {
                             this.voice.recording = None;
-                            this.show_toast("Micro indisponible", cx);
+                            this.show_toast(t!("voice.error.microphone_unavailable"), cx);
                         }
                     }
                 }
@@ -425,13 +425,13 @@ impl MissiveApp {
                 Ok(Err(err)) => {
                     eprintln!("[voice] recording failed: {err:#}");
                     let _ = this.update(cx, |this, cx| {
-                        this.show_toast("Enregistrement impossible", cx)
+                        this.show_toast(t!("voice.error.recording_failed"), cx)
                     });
                     return;
                 }
                 _ => {
                     let _ = this.update(cx, |this, cx| {
-                        this.show_toast("Enregistrement interrompu", cx)
+                        this.show_toast(t!("voice.error.recording_interrupted"), cx)
                     });
                     return;
                 }
@@ -439,7 +439,7 @@ impl MissiveApp {
             if recorded.duration_ms < MIN_VOICE_MS {
                 let _ = std::fs::remove_file(&recorded.path);
                 let _ = this.update(cx, |this, cx| {
-                    this.show_toast("Message vocal trop court", cx)
+                    this.show_toast(t!("voice.error.too_short"), cx)
                 });
                 return;
             }
@@ -467,7 +467,7 @@ impl MissiveApp {
                     this.on_message_removed(&thread_id, &client_id, cx);
                     this.remeasure_last_outgoing(&thread_id, cx);
                     this.show_toast(
-                        format!("Échec de l'envoi du message vocal. {}", action_error(&err)),
+                        t!("voice.error.send_failed", reason = action_error(&err)),
                         cx,
                     );
                 }

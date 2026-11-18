@@ -4,7 +4,7 @@ use gpui_kit::*;
 use serde::Deserialize;
 use serde_json::{Value, json};
 
-use super::{MissiveApp, action_error, library::fold};
+use super::{MissiveApp, action_error};
 use crate::bridge::BridgeError;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -26,19 +26,19 @@ impl ExportFormat {
         }
     }
 
-    pub(crate) fn label(self) -> &'static str {
+    pub(crate) fn label(self) -> SharedString {
         match self {
-            ExportFormat::Html => "Page web (HTML)",
-            ExportFormat::Markdown => "Texte (Markdown)",
-            ExportFormat::Json => "Données (JSON)",
+            ExportFormat::Html => ts!("export.format.html.label"),
+            ExportFormat::Markdown => ts!("export.format.markdown.label"),
+            ExportFormat::Json => ts!("export.format.json.label"),
         }
     }
 
-    pub(crate) fn hint(self) -> &'static str {
+    pub(crate) fn hint(self) -> SharedString {
         match self {
-            ExportFormat::Html => "Lisible dans un navigateur et imprimable",
-            ExportFormat::Markdown => "Texte simple, facile à relire ou à archiver",
-            ExportFormat::Json => "Toutes les données, pour un traitement automatique",
+            ExportFormat::Html => ts!("export.format.html.hint"),
+            ExportFormat::Markdown => ts!("export.format.markdown.hint"),
+            ExportFormat::Json => ts!("export.format.json.hint"),
         }
     }
 }
@@ -73,7 +73,7 @@ pub(crate) struct SaveMediaOutcome {
 enum Ending<T> {
     Done(T),
     Cancelled,
-    Busy(String),
+    Busy,
     Failed(String),
 }
 
@@ -83,11 +83,7 @@ fn classify<T>(result: anyhow::Result<T>, cancelled: impl Fn(&T) -> bool) -> End
         Ok(value) => Ending::Done(value),
         Err(err) => match err.downcast_ref::<BridgeError>() {
             Some(error) if error.code == "cancelled" => Ending::Cancelled,
-            Some(error)
-                if error.code == "bad_request" && fold(&error.message).contains("deja en cours") =>
-            {
-                Ending::Busy(error.message.clone())
-            }
+            Some(error) if error.code == "busy" => Ending::Busy,
             _ => Ending::Failed(action_error(&err)),
         },
     }
@@ -110,11 +106,7 @@ pub(crate) struct ExportJob {
 
 impl ExportJob {
     pub(crate) fn progress_label(&self) -> String {
-        format!(
-            "{}, {}",
-            count_label(self.messages, "message", "messages"),
-            count_label(self.media, "média", "médias")
-        )
+        format!("{}, {}", message_count(self.messages), media_count(self.media))
     }
 }
 
@@ -122,14 +114,15 @@ impl ExportOutcome {
     pub(crate) fn summary_label(&self) -> String {
         let mut summary = format!(
             "{}, {}",
-            count_label(self.messages, "message", "messages"),
-            count_label(self.media, "média", "médias")
+            message_count(self.messages),
+            media_count(self.media)
         );
         if self.media_failed > 0 {
-            summary.push_str(&format!(
-                " · {} non {}",
-                group_digits(self.media_failed),
-                if self.media_failed > 1 { "téléchargés" } else { "téléchargé" }
+            summary.push_str(" · ");
+            summary.push_str(&tn!(
+                "export.not_downloaded",
+                self.media_failed,
+                grouped = group_digits(self.media_failed)
             ));
         }
         summary
@@ -142,9 +135,9 @@ impl MediaSave {
             Some(total) if total > 0 => format!(
                 "{} / {}",
                 group_digits(self.saved),
-                count_label(total, "média", "médias")
+                media_count(total)
             ),
-            _ => count_label(self.saved, "média", "médias"),
+            _ => media_count(self.saved),
         }
     }
 }
@@ -165,7 +158,9 @@ pub(crate) struct Exports {
     last_dir: Option<PathBuf>,
 }
 
-const BUSY_TOAST: &str = "Un export ou un téléchargement est déjà en cours.";
+fn busy_toast() -> SharedString {
+    ts!("export.busy")
+}
 
 fn int(data: &Value, key: &str) -> Option<i64> {
     data.get(key).and_then(Value::as_i64)
@@ -173,19 +168,23 @@ fn int(data: &Value, key: &str) -> Option<i64> {
 
 fn group_digits(value: i64) -> String {
     let digits = value.unsigned_abs().to_string();
+    let separator = if crate::i18n::is_french() { '\u{a0}' } else { ',' };
     let mut out = String::new();
     for (index, c) in digits.chars().enumerate() {
         if index > 0 && (digits.len() - index) % 3 == 0 {
-            out.push('\u{a0}');
+            out.push(separator);
         }
         out.push(c);
     }
     if value < 0 { format!("-{out}") } else { out }
 }
 
-pub(crate) fn count_label(value: i64, singular: &str, plural: &str) -> String {
-    let word = if value.abs() > 1 { plural } else { singular };
-    format!("{} {word}", group_digits(value))
+pub(crate) fn message_count(value: i64) -> String {
+    tn!("export.messages", value, grouped = group_digits(value)).into_owned()
+}
+
+pub(crate) fn media_count(value: i64) -> String {
+    tn!("export.media", value, grouped = group_digits(value)).into_owned()
 }
 
 pub(crate) fn thread_display(app: &MissiveApp, thread_id: &str) -> String {
@@ -194,7 +193,7 @@ pub(crate) fn thread_display(app: &MissiveApp, thread_id: &str) -> String {
         .find(|thread| thread.id == thread_id)
         .map(|thread| thread.name.trim().to_string())
         .filter(|name| !name.is_empty())
-        .unwrap_or_else(|| "Conversation".into())
+        .unwrap_or_else(|| t!("export.default_thread_name").into_owned())
 }
 
 impl MissiveApp {
@@ -298,7 +297,7 @@ impl MissiveApp {
             files: false,
             directories: true,
             multiple: false,
-            prompt: Some("Choisir ce dossier".into()),
+            prompt: Some(ts!("export.pick_folder_prompt")),
         });
         cx.spawn(async move |this, cx| {
             let Ok(Ok(Some(paths))) = receiver.await else {
@@ -334,7 +333,7 @@ impl MissiveApp {
 
     pub(crate) fn start_export(&mut self, cx: &mut Context<Self>) {
         if self.archive_busy() {
-            self.show_toast(BUSY_TOAST, cx);
+            self.show_toast(busy_toast(), cx);
             return;
         }
         let Some(dialog) = self.exports.dialog.as_ref() else {
@@ -351,6 +350,7 @@ impl MissiveApp {
             "dir": dir.to_string_lossy(),
             "format": dialog.format.bridge(),
             "include_media": dialog.include_media,
+            "locale": crate::i18n::current(),
         });
         self.exports.last_dir = Some(dir);
         self.exports.job = Some(ExportJob {
@@ -376,11 +376,11 @@ impl MissiveApp {
                 let toast = match classify(result, |outcome: &ExportOutcome| outcome.cancelled) {
                     Ending::Cancelled => {
                         this.exports.job = None;
-                        "Export annulé".to_string()
+                        t!("export.cancelled").into_owned()
                     }
-                    Ending::Busy(message) => {
+                    Ending::Busy => {
                         this.exports.job = None;
-                        message
+                        t!("export.already_running").into_owned()
                     }
                     Ending::Done(outcome) => {
                         let Some(job) = this.exports.job.as_mut() else {
@@ -388,11 +388,12 @@ impl MissiveApp {
                         };
                         job.messages = outcome.messages;
                         job.media = outcome.media;
-                        let text = format!(
-                            "« {} » exportée : {}",
-                            job.thread_name,
-                            count_label(outcome.messages, "message", "messages")
-                        );
+                        let text = t!(
+                            "export.done",
+                            name = job.thread_name,
+                            count = message_count(outcome.messages)
+                        )
+                        .into_owned();
                         job.result = Some(Ok(outcome));
                         text
                     }
@@ -400,7 +401,7 @@ impl MissiveApp {
                         if let Some(job) = this.exports.job.as_mut() {
                             job.result = Some(Err(error.clone().into()));
                         }
-                        format!("Export impossible : {error}")
+                        t!("export.failed", error = error).into_owned()
                     }
                 };
                 this.show_toast(toast, cx);
@@ -429,7 +430,10 @@ impl MissiveApp {
             if let Err(err) = result {
                 let _ = this.update(cx, |this, cx| {
                     this.exports.cancelling = false;
-                    this.show_toast(format!("Annulation impossible : {}", action_error(&err)), cx);
+                    this.show_toast(
+                        t!("export.cancel_failed", error = action_error(&err)).into_owned(),
+                        cx,
+                    );
                 });
             }
         })
@@ -453,14 +457,14 @@ impl MissiveApp {
 
     pub(crate) fn save_all_media(&mut self, thread_id: &str, cx: &mut Context<Self>) {
         if self.archive_busy() {
-            self.show_toast(BUSY_TOAST, cx);
+            self.show_toast(busy_toast(), cx);
             return;
         }
         let receiver = cx.prompt_for_paths(PathPromptOptions {
             files: false,
             directories: true,
             multiple: false,
-            prompt: Some("Enregistrer ici".into()),
+            prompt: Some(ts!("export.save_here_prompt")),
         });
         let thread_id = thread_id.to_string();
         cx.spawn(async move |this, cx| {
@@ -478,7 +482,7 @@ impl MissiveApp {
     fn start_media_save(&mut self, thread_id: String, dir: PathBuf, cx: &mut Context<Self>) {
         let Some(bridge) = self.bridge() else { return };
         if self.archive_busy() {
-            self.show_toast(BUSY_TOAST, cx);
+            self.show_toast(busy_toast(), cx);
             return;
         }
         self.exports.saves.retain(|save| save.thread_id != thread_id);
@@ -489,7 +493,11 @@ impl MissiveApp {
             result: None,
         });
         self.exports.last_dir = Some(dir.clone());
-        let params = json!({ "thread_id": thread_id, "dir": dir.to_string_lossy() });
+        let params = json!({
+            "thread_id": thread_id,
+            "dir": dir.to_string_lossy(),
+            "locale": crate::i18n::current(),
+        });
         cx.notify();
         cx.spawn(async move |this, cx| {
             let result = bridge.call::<SaveMediaOutcome>("save_media", params).await;
@@ -508,23 +516,25 @@ impl MissiveApp {
                 let toast = match ending {
                     Ending::Cancelled => {
                         this.exports.saves.remove(index);
-                        "Téléchargement annulé".to_string()
+                        t!("export.download_cancelled").into_owned()
                     }
-                    Ending::Busy(message) => {
+                    Ending::Busy => {
                         this.exports.saves.remove(index);
-                        message
+                        t!("export.already_running").into_owned()
                     }
                     Ending::Done(outcome) => {
                         let save = &mut this.exports.saves[index];
                         save.saved = outcome.saved;
-                        let mut text = format!(
-                            "« {name} » : {} enregistrés",
-                            count_label(outcome.saved, "média", "médias")
-                        );
+                        let mut text = t!(
+                            "export.saved",
+                            name = name,
+                            count = media_count(outcome.saved)
+                        )
+                        .into_owned();
                         if outcome.failed > 0 {
-                            text.push_str(&format!(
-                                ", {} en échec",
-                                group_digits(outcome.failed)
+                            text.push_str(&t!(
+                                "export.saved_failed",
+                                count = group_digits(outcome.failed)
                             ));
                         }
                         save.result = Some(Ok(outcome));
@@ -532,7 +542,7 @@ impl MissiveApp {
                     }
                     Ending::Failed(error) => {
                         this.exports.saves[index].result = Some(Err(error.clone().into()));
-                        format!("Téléchargement impossible : {error}")
+                        t!("export.download_failed", error = error).into_owned()
                     }
                 };
                 this.show_toast(toast, cx);
@@ -565,7 +575,7 @@ fn open_folder(path: &std::path::Path, cx: &mut App) {
 
 #[cfg(test)]
 mod tests {
-    use super::{Ending, classify, count_label, group_digits};
+    use super::{Ending, action_error, classify, group_digits, media_count, message_count};
     use crate::bridge::BridgeError;
 
     fn bridge_error(code: &str, message: &str) -> anyhow::Error {
@@ -588,11 +598,18 @@ mod tests {
         );
         assert_eq!(
             classify(
+                Err(bridge_error("busy", "an archive job is already running")),
+                flag
+            ),
+            Ending::Busy
+        );
+        assert!(matches!(
+            classify(
                 Err(bridge_error("bad_request", "Un export est déjà en cours")),
                 flag
             ),
-            Ending::Busy("Un export est déjà en cours".into())
-        );
+            Ending::Failed(_)
+        ));
         assert!(matches!(
             classify(Err(bridge_error("bad_request", "dossier introuvable")), flag),
             Ending::Failed(_)
@@ -600,12 +617,33 @@ mod tests {
     }
 
     #[::core::prelude::v1::test]
+    fn rejected_edit_follows_the_language() {
+        let rejected = || action_error(&bridge_error("edit_rejected", "rejected"));
+        {
+            let _guard = crate::i18n::scoped("fr");
+            assert_eq!(rejected(), "Messenger a refusé la modification");
+        }
+        let _guard = crate::i18n::scoped("en");
+        assert_eq!(rejected(), "Messenger rejected the edit");
+    }
+
+    #[::core::prelude::v1::test]
     fn counts_are_grouped_and_pluralized() {
+        let _guard = crate::i18n::scoped("fr");
         assert_eq!(group_digits(1240), "1\u{a0}240");
         assert_eq!(group_digits(85), "85");
         assert_eq!(group_digits(1_000_000), "1\u{a0}000\u{a0}000");
-        assert_eq!(count_label(1, "message", "messages"), "1 message");
-        assert_eq!(count_label(0, "média", "médias"), "0 média");
-        assert_eq!(count_label(1240, "message", "messages"), "1\u{a0}240 messages");
+        assert_eq!(message_count(1), "1 message");
+        assert_eq!(media_count(0), "0 média");
+        assert_eq!(message_count(1240), "1\u{a0}240 messages");
+    }
+
+    #[::core::prelude::v1::test]
+    fn counts_follow_english_plurals() {
+        let _guard = crate::i18n::scoped("en");
+        assert_eq!(message_count(1), "1 message");
+        assert_eq!(message_count(0), "0 messages");
+        assert_eq!(media_count(1240), "1,240 media files");
+        assert_eq!(media_count(1), "1 media file");
     }
 }

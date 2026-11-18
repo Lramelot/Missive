@@ -198,9 +198,9 @@ impl MissiveApp {
         });
 
         let label: SharedString = if undecodable {
-            "Ouvrir".into()
+            ts!("voice_view.label.open")
         } else if unavailable {
-            "Indisponible".into()
+            ts!("voice_view.label.unavailable")
         } else {
             match (playback, duration_ms) {
                 (Some(playback), Some(duration)) if !playback.loading => SharedString::from(
@@ -298,7 +298,7 @@ impl MissiveApp {
                 .text_size(px(13.))
                 .font_weight(FontWeight::SEMIBOLD)
                 .text_color(p.warning)
-                .child("Durée maximale atteinte")
+                .child(ts!("voice_view.recording.max_reached"))
                 .into_any_element()
         } else if recording.ready {
             h_flex()
@@ -316,7 +316,7 @@ impl MissiveApp {
                 .flex_1()
                 .text_size(px(13.))
                 .text_color(p.text_muted)
-                .child("Ouverture du micro…")
+                .child(ts!("voice_view.recording.opening_microphone"))
                 .into_any_element()
         };
         Some(

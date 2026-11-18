@@ -15,20 +15,22 @@ use crate::{
     style::Palette,
 };
 
-const MONTHS_LONG: [&str; 12] = [
-    "janvier",
-    "février",
-    "mars",
-    "avril",
-    "mai",
-    "juin",
-    "juillet",
-    "août",
-    "septembre",
-    "octobre",
-    "novembre",
-    "décembre",
-];
+fn month_name(month0: u32) -> SharedString {
+    match month0 {
+        0 => ts!("overlays.month.jan"),
+        1 => ts!("overlays.month.feb"),
+        2 => ts!("overlays.month.mar"),
+        3 => ts!("overlays.month.apr"),
+        4 => ts!("overlays.month.may"),
+        5 => ts!("overlays.month.jun"),
+        6 => ts!("overlays.month.jul"),
+        7 => ts!("overlays.month.aug"),
+        8 => ts!("overlays.month.sep"),
+        9 => ts!("overlays.month.oct"),
+        10 => ts!("overlays.month.nov"),
+        _ => ts!("overlays.month.dec"),
+    }
+}
 
 fn scrim() -> Div {
     div()
@@ -45,7 +47,7 @@ fn month_label(timestamp_ms: i64) -> String {
     Local
         .timestamp_millis_opt(timestamp_ms)
         .single()
-        .map(|time| format!("{} {}", MONTHS_LONG[time.month0() as usize], time.year()))
+        .map(|time| format!("{} {}", month_name(time.month0()), time.year()))
         .unwrap_or_default()
 }
 
@@ -62,9 +64,9 @@ impl MissiveApp {
             .unwrap_or_default();
 
         let tabs: Vec<AnyElement> = [
-            ("tab-media", "Photos et vidéos", GalleryTab::Media),
-            ("tab-files", "Fichiers", GalleryTab::Files),
-            ("tab-links", "Liens", GalleryTab::Links),
+            ("tab-media", ts!("overlays.gallery.tab_media"), GalleryTab::Media),
+            ("tab-files", ts!("overlays.gallery.tab_files"), GalleryTab::Files),
+            ("tab-links", ts!("overlays.gallery.tab_links"), GalleryTab::Links),
         ]
         .into_iter()
         .map(|(id, label, value)| {
@@ -158,7 +160,7 @@ impl MissiveApp {
                 .text_size(px(13.))
                 .text_color(p.text_muted)
                 .child(Icon::new(IconName::LoaderCircle).size(px(16.)))
-                .child("Chargement de l'historique…")
+                .child(ts!("overlays.gallery.loading"))
                 .into_any_element()
         } else if let Some(error) = gallery.error.clone() {
             div()
@@ -184,7 +186,7 @@ impl MissiveApp {
                         .text_size(px(13.))
                         .font_weight(FontWeight::SEMIBOLD)
                         .cursor_pointer()
-                        .child("Charger plus ancien")
+                        .child(ts!("overlays.gallery.load_more"))
                         .on_click(cx.listener(|this, _, _, cx| this.load_gallery_page(cx))),
                 )
                 .into_any_element()
@@ -195,9 +197,9 @@ impl MissiveApp {
                 .text_size(px(12.5))
                 .text_color(p.text_faint)
                 .child(if gallery.items.is_empty() {
-                    "Rien de partagé ici."
+                    ts!("overlays.gallery.empty")
                 } else {
-                    "Début de la conversation atteint."
+                    ts!("overlays.gallery.start_reached")
                 })
                 .into_any_element()
         };
@@ -230,7 +232,7 @@ impl MissiveApp {
                                         div()
                                             .text_size(px(19.))
                                             .font_weight(FontWeight::EXTRA_BOLD)
-                                            .child("Médias partagés"),
+                                            .child(ts!("overlays.gallery.title")),
                                     )
                                     .child(
                                         div()
@@ -370,16 +372,20 @@ impl MissiveApp {
                     .title
                     .clone()
                     .or_else(|| attachment.url.clone())
-                    .unwrap_or_else(|| "Lien".into()),
+                    .unwrap_or_else(|| t!("overlays.gallery.link").to_string()),
                 attachment.source.clone().unwrap_or_default(),
             ),
-            "audio" => (IconName::Mic, "Message vocal".into(), String::new()),
+            "audio" => (
+                IconName::Mic,
+                t!("overlays.gallery.voice_message").to_string(),
+                String::new(),
+            ),
             _ => (
                 IconName::FileText,
                 attachment
                     .file_name
                     .clone()
-                    .unwrap_or_else(|| "Fichier".into()),
+                    .unwrap_or_else(|| t!("overlays.gallery.file").to_string()),
                 attachment.size.map(human_size).unwrap_or_default(),
             ),
         };
@@ -497,7 +503,7 @@ impl MissiveApp {
                 .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
                 .child(Icon::new(icon).size(px(20.)).text_color(white()))
         };
-        let tool = |id: &'static str, icon: IconName, label: &'static str| {
+        let tool = |id: &'static str, icon: IconName, label: SharedString| {
             div()
                 .id(id)
                 .size(px(36.))
@@ -508,7 +514,7 @@ impl MissiveApp {
                 .justify_center()
                 .cursor_pointer()
                 .hover(|s| s.bg(hsla(0., 0., 1., 0.16)))
-                .tooltip(move |window, cx| Tooltip::new(label).build(window, cx))
+                .tooltip(move |window, cx| Tooltip::new(label.clone()).build(window, cx))
                 .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
                 .child(Icon::new(icon).size(px(18.)).text_color(white()))
         };
@@ -556,7 +562,7 @@ impl MissiveApp {
             }
             None => div()
                 .text_color(hsla(0., 0., 1., 0.6))
-                .child("Chargement…")
+                .child(ts!("overlays.lightbox.loading"))
                 .into_any_element(),
         };
         let bounds = self.find.viewer.bounds.clone();
@@ -593,7 +599,7 @@ impl MissiveApp {
             .bg(hsla(0., 0., 1., 0.08))
             .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
             .child(
-                tool("lightbox-zoom-out", IconName::ZoomOut, "Zoom arrière (−)")
+                tool("lightbox-zoom-out", IconName::ZoomOut, ts!("overlays.lightbox.zoom_out"))
                     .on_click(cx.listener(|this, _, _, cx| this.zoom_lightbox(-1, cx))),
             )
             .child(
@@ -604,17 +610,19 @@ impl MissiveApp {
                     .text_size(px(12.5))
                     .text_color(hsla(0., 0., 1., 0.85))
                     .cursor_pointer()
-                    .tooltip(|window, cx| Tooltip::new("Ajuster à la fenêtre (0)").build(window, cx))
+                    .tooltip(|window, cx| {
+                        Tooltip::new(ts!("overlays.lightbox.fit")).build(window, cx)
+                    })
                     .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
                     .on_click(cx.listener(|this, _, _, cx| this.reset_lightbox_zoom(cx)))
-                    .child(SharedString::from(format!("{} %", layout.percent))),
+                    .child(ts!("overlays.lightbox.zoom_level", percent = layout.percent)),
             )
             .child(
-                tool("lightbox-zoom-in", IconName::ZoomIn, "Zoom avant (+)")
+                tool("lightbox-zoom-in", IconName::ZoomIn, ts!("overlays.lightbox.zoom_in"))
                     .on_click(cx.listener(|this, _, _, cx| this.zoom_lightbox(1, cx))),
             )
             .child(
-                tool("lightbox-fit", IconName::Scan, "Ajuster à la fenêtre (0)")
+                tool("lightbox-fit", IconName::Scan, ts!("overlays.lightbox.fit"))
                     .on_click(cx.listener(|this, _, _, cx| this.reset_lightbox_zoom(cx))),
             );
         let actions = h_flex()
@@ -639,18 +647,18 @@ impl MissiveApp {
                 )
             })
             .child(
-                tool("lightbox-copy", IconName::Copy, "Copier l'image")
+                tool("lightbox-copy", IconName::Copy, ts!("overlays.lightbox.copy"))
                     .on_click(cx.listener(|this, _, _, cx| this.copy_lightbox_image(cx))),
             )
             .child(
-                tool("lightbox-save", IconName::Save, "Enregistrer sous…")
+                tool("lightbox-save", IconName::Save, ts!("overlays.lightbox.save"))
                     .on_click(cx.listener(|this, _, _, cx| this.save_lightbox_image(cx))),
             )
             .child(
                 tool(
                     "lightbox-open",
                     IconName::ExternalLink,
-                    "Ouvrir avec l'application par défaut",
+                    ts!("overlays.lightbox.open"),
                 )
                 .on_click(cx.listener(|this, _, _, cx| this.open_lightbox_externally(cx))),
             );
@@ -768,7 +776,7 @@ impl MissiveApp {
                                     .text_size(px(11.5))
                                     .font_weight(FontWeight::SEMIBOLD)
                                     .text_color(p.text_muted)
-                                    .child("Échap"),
+                                    .child(ts!("overlays.switcher.escape")),
                             ),
                     )
                     .child(
@@ -782,7 +790,7 @@ impl MissiveApp {
                                         .text_center()
                                         .text_size(px(13.))
                                         .text_color(p.text_faint)
-                                        .child("Aucune discussion"),
+                                        .child(ts!("overlays.switcher.empty")),
                                 )
                             })
                             .children(results.iter().enumerate().filter_map(|(row, index)| {
@@ -834,9 +842,9 @@ impl MissiveApp {
                             .border_color(p.divider)
                             .text_size(px(11.5))
                             .text_color(p.text_faint)
-                            .child("↑ ↓ naviguer")
-                            .child("Entrée ouvrir")
-                            .child("Alt+↑/↓ discussion précédente/suivante"),
+                            .child(ts!("overlays.switcher.navigate"))
+                            .child(ts!("overlays.switcher.open"))
+                            .child(ts!("overlays.switcher.step")),
                     ),
             )
             .into_any_element()
@@ -846,22 +854,21 @@ impl MissiveApp {
 fn human_size(bytes: i64) -> String {
     let bytes = bytes.max(0) as f64;
     if bytes < 1024. {
-        format!("{bytes:.0} o")
+        t!("overlays.size.bytes", size = format!("{bytes:.0}")).to_string()
     } else if bytes < 1024. * 1024. {
-        format!("{:.0} Ko", bytes / 1024.)
+        t!("overlays.size.kilobytes", size = format!("{:.0}", bytes / 1024.)).to_string()
     } else {
-        format!("{:.1} Mo", bytes / 1024. / 1024.)
+        t!("overlays.size.megabytes", size = format!("{:.1}", bytes / 1024. / 1024.)).to_string()
     }
 }
 
 fn gallery_count_label(count: usize, has_more: bool) -> String {
     let base = match count {
-        0 => "Aucun élément".to_string(),
-        1 => "1 élément".to_string(),
-        n => format!("{n} éléments"),
+        0 => t!("overlays.gallery.count_none").to_string(),
+        n => tn!("overlays.gallery.count", n).to_string(),
     };
     if has_more && count > 0 {
-        format!("{base} · défile pour en voir plus")
+        t!("overlays.gallery.count_more", label = base).to_string()
     } else {
         base
     }

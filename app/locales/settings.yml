@@ -1,0 +1,339 @@
+_version: 2
+settings:
+  title:
+    en: "Settings"
+    fr: "Paramètres"
+  section:
+    notifications:
+      en: "NOTIFICATIONS"
+      fr: "NOTIFICATIONS"
+    privacy:
+      en: "PRIVACY"
+      fr: "CONFIDENTIALITÉ"
+    snippets:
+      en: "QUICK REPLIES"
+      fr: "RÉPONSES RAPIDES"
+    window:
+      en: "WINDOW"
+      fr: "FENÊTRE"
+    appearance:
+      en: "APPEARANCE"
+      fr: "APPARENCE"
+    threads:
+      en: "CONVERSATIONS"
+      fr: "DISCUSSIONS"
+    updates:
+      en: "UPDATES"
+      fr: "MISES À JOUR"
+    diagnostic:
+      en: "DIAGNOSTICS"
+      fr: "DIAGNOSTIC"
+    account:
+      en: "ACCOUNT"
+      fr: "COMPTE"
+  notifications:
+    title:
+      en: "Desktop notifications"
+      fr: "Notifications de bureau"
+    description:
+      en: "One notification for each new message."
+      fr: "Une notification pour chaque nouveau message."
+    preview_title:
+      en: "Show content"
+      fr: "Afficher le contenu"
+    preview_description:
+      en: "Otherwise, the notification only says “New message”."
+      fr: "Sinon, la notification indique seulement « Nouveau message »."
+  keywords:
+    title:
+      en: "Override keywords"
+      fr: "Mots-clés qui passent outre"
+    description:
+      en: "A message containing any of these words notifies you even when muted or during quiet hours. Case and accents are ignored."
+      fr: "Un message contenant l'un de ces mots vous notifie même en sourdine ou pendant les heures calmes. Majuscules et accents sont ignorés."
+    placeholder:
+      en: "Word or phrase"
+      fr: "Mot ou expression"
+    add:
+      en: "Add a keyword"
+      fr: "Ajouter un mot-clé"
+    add_submit:
+      en: "Add"
+      fr: "Ajouter"
+    close:
+      en: "Close"
+      fr: "Fermer"
+    error_empty:
+      en: "Enter a word or phrase."
+      fr: "Saisissez un mot ou une expression."
+    error_no_alphanumeric:
+      en: "The keyword must contain at least one letter or digit."
+      fr: "Le mot-clé doit contenir au moins une lettre ou un chiffre."
+    error_too_long:
+      en: "%{max} characters maximum."
+      fr: "%{max} caractères au maximum."
+    error_duplicate:
+      en: "This keyword already exists."
+      fr: "Ce mot-clé existe déjà."
+  quiet_hours:
+    title:
+      en: "Quiet hours"
+      fr: "Heures calmes"
+    description:
+      en: "No notifications during this period, except priority conversations, mentions and keywords."
+      fr: "Aucune notification sur cette plage, sauf conversations prioritaires, mentions et mots-clés."
+    from:
+      en: "From"
+      fr: "De"
+    to:
+      en: "to"
+      fr: "à"
+    local_time:
+      en: "local time"
+      fr: "heure locale"
+    ok:
+      en: "OK"
+      fr: "OK"
+    cancel:
+      en: "Cancel"
+      fr: "Annuler"
+    error_invalid_time:
+      en: "Invalid time, for example 22:30."
+      fr: "Heure invalide, par exemple 22:30."
+    error_same_time:
+      en: "Start and end must be different."
+      fr: "Le début et la fin doivent être différents."
+  priority:
+    title:
+      en: "Priority conversations"
+      fr: "Conversations prioritaires"
+    description:
+      en: "They notify you even during quiet hours. Add them from a conversation's menu."
+      fr: "Elles vous notifient même pendant les heures calmes. Ajoutez-en depuis le menu d'une conversation."
+    empty:
+      en: "No priority conversations."
+      fr: "Aucune conversation prioritaire."
+    unavailable:
+      en: "Conversation unavailable"
+      fr: "Conversation indisponible"
+  snippets:
+    hint:
+      en: "Type “/” followed by the shortcut in a message to insert the text."
+      fr: "Tapez « / » suivi du raccourci dans un message pour insérer le texte."
+    empty:
+      en: "No quick replies yet."
+      fr: "Aucune réponse rapide pour le moment."
+    add:
+      en: "Add a quick reply"
+      fr: "Ajouter une réponse rapide"
+    new_title:
+      en: "New quick reply"
+      fr: "Nouvelle réponse rapide"
+    edit_title:
+      en: "Edit quick reply"
+      fr: "Modifier la réponse rapide"
+    shortcut_label:
+      en: "Shortcut, no spaces"
+      fr: "Raccourci, sans espace"
+    shortcut_placeholder:
+      en: "shortcut, for example address"
+      fr: "raccourci, par exemple adresse"
+    text_label:
+      en: "Text, over several lines if needed"
+      fr: "Texte, sur plusieurs lignes si besoin"
+    text_placeholder:
+      en: "Text inserted into the message"
+      fr: "Texte inséré dans le message"
+    cancel:
+      en: "Cancel"
+      fr: "Annuler"
+    save:
+      en: "Save"
+      fr: "Enregistrer"
+    error_shortcut_empty:
+      en: "Enter a shortcut."
+      fr: "Indiquez un raccourci."
+    error_shortcut_space:
+      en: "The shortcut must not contain spaces."
+      fr: "Le raccourci ne doit pas contenir d'espace."
+    error_shortcut_slash:
+      en: "The shortcut must not contain a “/”."
+      fr: "Le raccourci ne doit pas contenir de « / »."
+    error_shortcut_too_long:
+      en: "%{max} characters maximum for the shortcut."
+      fr: "%{max} caractères au maximum pour le raccourci."
+    error_shortcut_taken:
+      en: "This shortcut already exists."
+      fr: "Ce raccourci existe déjà."
+    error_text_empty:
+      en: "Enter the text to insert."
+      fr: "Saisissez le texte à insérer."
+  privacy:
+    read_receipts_title:
+      en: "Send read receipts"
+      fr: "Envoyer les confirmations de lecture"
+    read_receipts_description:
+      en: "When off, you read discreetly: the sender cannot see that you have read the message. Replying or choosing “Mark as read” tells them."
+      fr: "Désactivé, vous lisez en toute discrétion : l'expéditeur ne voit pas que vous avez lu. Répondre ou choisir « Marquer comme lu » le lui indique."
+    typing_title:
+      en: "Show when I'm typing"
+      fr: "Indiquer quand j'écris"
+    typing_description:
+      en: "Your contacts can see that you are typing."
+      fr: "Vos contacts voient que vous êtes en train d'écrire."
+  window:
+    tray_title:
+      en: "Keep Missive in the notification area"
+      fr: "Garder Missive dans la zone de notification"
+    tray_description:
+      en: "Closing the window hides it instead of quitting."
+      fr: "Fermer la fenêtre la masque au lieu de quitter."
+    autostart_title:
+      en: "Launch at startup"
+      fr: "Lancer au démarrage"
+    autostart_description:
+      en: "Missive starts in the background when you sign in."
+      fr: "Missive démarre en arrière-plan à l'ouverture de session."
+  appearance:
+    theme_system:
+      en: "System"
+      fr: "Système"
+    theme_light:
+      en: "Light"
+      fr: "Clair"
+    theme_dark:
+      en: "Dark"
+      fr: "Sombre"
+    text_size_title:
+      en: "Text size"
+      fr: "Taille du texte"
+    text_size_description:
+      en: "Messages, names and the compose box."
+      fr: "Messages, noms et zone de saisie."
+    size_small:
+      en: "Small"
+      fr: "Petit"
+    size_normal:
+      en: "Normal"
+      fr: "Normal"
+    size_large:
+      en: "Large"
+      fr: "Grand"
+    size_larger:
+      en: "Extra large"
+      fr: "Très grand"
+    compact_title:
+      en: "Compact view"
+      fr: "Affichage compact"
+    compact_description:
+      en: "Tightens the spacing between messages."
+      fr: "Resserre l'espacement entre les messages."
+  language:
+    title:
+      en: "Language"
+      fr: "Langue"
+    description:
+      en: "Automatic follows the system language."
+      fr: "Automatique suit la langue du système."
+    auto:
+      en: "Automatic"
+      fr: "Automatique"
+  threads:
+    archived_title:
+      en: "Archived in Missive"
+      fr: "Archivées dans Missive"
+    archived_none:
+      en: "No locally archived conversations."
+      fr: "Aucune discussion archivée localement."
+    archived_hidden:
+      one:
+        en: "%{count} conversation hidden from “All” until the next message."
+        fr: "%{count} discussion masquée de « Toutes » jusqu'au prochain message."
+      other:
+        en: "%{count} conversations hidden from “All” until the next message."
+        fr: "%{count} discussions masquées de « Toutes » jusqu'au prochain message."
+    unarchive_all:
+      en: "Unarchive all"
+      fr: "Tout désarchiver"
+  updates:
+    auto_title:
+      en: "Check automatically"
+      fr: "Vérifier automatiquement"
+    auto_description:
+      en: "Looks for published versions at startup."
+      fr: "Interroge les versions publiées au démarrage."
+    version:
+      en: "Version %{version}"
+      fr: "Version %{version}"
+    not_installed:
+      en: "· not installed, no automatic updates"
+      fr: "· hors installation, pas de mise à jour automatique"
+    downloading:
+      en: "Downloading version %{version}…"
+      fr: "Téléchargement de la version %{version}…"
+    restart:
+      en: "Restart to switch to %{version}"
+      fr: "Redémarrer pour passer en %{version}"
+    check_now:
+      en: "Check now"
+      fr: "Rechercher maintenant"
+  diagnostic:
+    title:
+      en: "Diagnostic log"
+      fr: "Journal de diagnostic"
+    description:
+      en: "Version, system and recent application log, without the content of your messages. Useful for reporting a problem."
+      fr: "Version, système et journal récent de l'application, sans le contenu de vos messages. Utile pour signaler un problème."
+    copy:
+      en: "Copy diagnostics"
+      fr: "Copier le diagnostic"
+    open_logs:
+      en: "Open the logs folder"
+      fr: "Ouvrir le dossier des journaux"
+  account:
+    restore_history:
+      en: "Restore encrypted history"
+      fr: "Restaurer l'historique chiffré"
+    logout:
+      en: "Sign out"
+      fr: "Se déconnecter"
+system:
+  toast:
+    restarted_after_error:
+      en: "Missive restarted after an error"
+      fr: "Missive a redémarré après une erreur"
+    reply_kept_as_draft:
+      en: "Reply kept as a draft"
+      fr: "Réponse gardée en brouillon"
+    diagnostic_copied:
+      en: "Diagnostics copied"
+      fr: "Diagnostic copié"
+  error:
+    update_failed:
+      en: "Update failed"
+      fr: "Mise à jour impossible"
+    launch_at_login_failed:
+      en: "Could not set launch at startup"
+      fr: "Lancement au démarrage impossible"
+    logout_failed:
+      en: "Could not sign out"
+      fr: "Déconnexion impossible"
+  diagnostic:
+    link_connecting:
+      en: "connecting"
+      fr: "connexion en cours"
+    link_online:
+      en: "online"
+      fr: "en ligne"
+    link_reconnecting:
+      en: "reconnecting"
+      fr: "reconnexion"
+    link_error:
+      en: "error"
+      fr: "erreur"
+    no_response:
+      en: "no response"
+      fr: "pas de réponse"
+    bridge_not_started:
+      en: "bridge not started"
+      fr: "pont non démarré"
