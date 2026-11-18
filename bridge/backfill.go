@@ -30,7 +30,19 @@ func (b *MetaBackend) startBackfill(rec threadRec, beforeMS int64, want int) {
 	}()
 }
 
-const catchUpSlackMS = 2000
+const (
+	catchUpSlackMS      = 2000
+	staleCatchUpDelay   = 8 * time.Second
+	staleCatchUpThreads = 10
+)
+
+func (b *MetaBackend) catchUpStaleThreads() {
+	for _, view := range b.store.ListThreads(staleCatchUpThreads) {
+		if rec, ok := b.store.Thread(view.ID); ok && b.needsCatchUp(rec) {
+			b.startCatchUp(rec)
+		}
+	}
+}
 
 func (b *MetaBackend) needsCatchUp(rec threadRec) bool {
 	latest := b.store.LatestTimestamp(rec.ID)

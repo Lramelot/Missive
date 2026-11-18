@@ -3,9 +3,13 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"slices"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"go.mau.fi/mautrix-meta/pkg/messagix/table"
 )
 
 func TestSnippetFollowsNewestStoredMessage(t *testing.T) {
@@ -61,6 +65,80 @@ func TestOpeningAThreadRepairsAStaleSnippet(t *testing.T) {
 	}
 	if len(eventsOf(t, buf, EventThreads)) != before {
 		t.Fatal("an unchanged snippet must not be re-emitted")
+	}
+}
+
+func backfilledIDs(t *testing.T, buf *syncBuffer) []string {
+	t.Helper()
+	var ids []string
+	for _, raw := range eventsOf(t, buf, EventBackfilled) {
+		var event MessagesBackfilledEvent
+		if err := json.Unmarshal(raw, &event); err != nil {
+			t.Fatal(err)
+		}
+		for _, msg := range event.Messages {
+			ids = append(ids, msg.ID)
+		}
+	}
+	slices.Sort(ids)
+	return ids
+}
+
+func TestMessagesMissedDuringSleepReachTheApp(t *testing.T) {
+	b, buf, _ := loggedInBackend(t)
+	now := time.Now().UnixMilli()
+	b.store.PutMessage(Message{ID: "seen", ThreadID: "5", TimestampMS: now - 3_600_000})
+	b.lsCatchingUp.Store(true)
+	b.handleTable(&table.LSTable{LSInsertMessage: []*table.LSInsertMessage{
+		{ThreadKey: 5, MessageId: "mid.$asleep", TimestampMs: now - 60_000, SenderId: 7, Text: "pendant la veille"},
+		{ThreadKey: 5, MessageId: "mid.$ancient", TimestampMs: now - 7_200_000, SenderId: 7, Text: "vieux"},
+	}}, modeLive)
+	b.lsCatchingUp.Store(false)
+	if n := len(eventsOf(t, buf, EventMessage)); n != 0 {
+		t.Fatalf("catch-up messages must not be announced as live, got %d", n)
+	}
+	if got := backfilledIDs(t, buf); !slices.Equal(got, []string{"mid.$asleep"}) {
+		t.Fatalf("a message newer than the cache must be pushed to the app, got %v", got)
+	}
+
+	b.handleTable(&table.LSTable{
+		LSInsertNewMessageRange: []*table.LSInsertNewMessageRange{{ThreadKey: 5, MinTimestampMs: now - 30_000, MaxTimestampMs: now - 30_000, HasMoreBefore: true}},
+		LSUpsertMessage: []*table.LSUpsertMessage{
+			{ThreadKey: 5, MessageId: "mid.$synced", TimestampMs: now - 30_000, SenderId: 7, Text: "resync"},
+		},
+	}, modeLive)
+	if got := backfilledIDs(t, buf); !slices.Equal(got, []string{"mid.$asleep", "mid.$synced"}) {
+		t.Fatalf("an upserted recent message must be pushed to the app, got %v", got)
+	}
+
+	b.recordNewMessage(Message{ID: "wa-offline", ThreadID: "5", TimestampMS: now - 10_000, Text: "chiffré"}, false)
+	b.recordNewMessage(Message{ID: "wa-old", ThreadID: "5", TimestampMS: now - 9_000_000, Text: "archive"}, false)
+	if got := backfilledIDs(t, buf); !slices.Equal(got, []string{"mid.$asleep", "mid.$synced", "wa-offline"}) {
+		t.Fatalf("only an offline encrypted message newer than the cache must be pushed, got %v", got)
+	}
+}
+
+func TestReconnectCatchesUpStaleThreads(t *testing.T) {
+	b, _, _ := loggedInBackend(t)
+	b.store.PutMessage(Message{ID: "a", ThreadID: "5", TimestampMS: 1_000_000})
+	b.store.UpdateThread("5", func(rec *threadRec) { rec.LastActivityMS = 2_000_000 })
+	b.store.PutMessage(Message{ID: "b", ThreadID: "6", TimestampMS: 1_000_000})
+	b.store.UpdateThread("6", func(rec *threadRec) { rec.LastActivityMS = 1_000_000 })
+	b.store.UpdateThread("7", func(rec *threadRec) { rec.LastActivityMS = 3_000_000 })
+	var fetched sync.Map
+	b.latestPageFn = func(ctx context.Context, rec threadRec) bool {
+		fetched.Store(rec.ID, true)
+		return true
+	}
+	b.catchUpStaleThreads()
+	waitFor(t, 5*time.Second, func() bool {
+		_, ok := fetched.Load("5")
+		return ok
+	})
+	for _, id := range []string{"6", "7"} {
+		if _, ok := fetched.Load(id); ok {
+			t.Fatalf("thread %s is up to date or was never opened and must not be fetched", id)
+		}
 	}
 }
 

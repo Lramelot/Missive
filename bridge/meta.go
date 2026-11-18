@@ -1159,6 +1159,7 @@ func isLiveTimestamp(ts int64) bool {
 }
 
 func (b *MetaBackend) recordNewMessage(msg Message, live bool) {
+	latest := b.store.LatestTimestamp(msg.ThreadID)
 	if _, existed := b.store.PutMessage(msg); existed {
 		return
 	}
@@ -1167,6 +1168,9 @@ func (b *MetaBackend) recordNewMessage(msg Message, live bool) {
 		b.emitMessage(EventMessage, msg)
 	} else {
 		b.applyHistoryToThread(msg)
+		if msg.TimestampMS > latest {
+			b.out.Emit(EventBackfilled, MessagesBackfilledEvent{ThreadID: msg.ThreadID, Messages: []Message{msg}})
+		}
 	}
 	if view, ok := b.store.ThreadView(msg.ThreadID); ok {
 		b.out.Emit(EventThreads, ThreadsEvent{Threads: []Thread{view}})

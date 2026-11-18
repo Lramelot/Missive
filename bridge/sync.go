@@ -51,6 +51,12 @@ func (b *MetaBackend) syncThreads(ctx context.Context, client *messagix.Client, 
 			return b.store.ThreadCount() < targetInboxThreadSize
 		})
 		b.paginateE2EEThreads(ctx, client, maxE2EEThreadPages)
+	} else {
+		go func() {
+			if sleepCtx(ctx, staleCatchUpDelay) {
+				b.catchUpStaleThreads()
+			}
+		}()
 	}
 	if !b.shouldRunHeavySync(first) {
 		return

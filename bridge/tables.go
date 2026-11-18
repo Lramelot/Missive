@@ -30,6 +30,23 @@ type tableContext struct {
 	active        map[int64]bool
 	upserted      map[string]bool
 	historyMsgs   map[string]bool
+	latestBefore  map[string]int64
+	quiet         map[string][]Message
+}
+
+func (tc *tableContext) previousLatest(id string) int64 {
+	if latest, ok := tc.latestBefore[id]; ok {
+		return latest
+	}
+	latest := tc.b.store.LatestTimestamp(id)
+	tc.latestBefore[id] = latest
+	return latest
+}
+
+func (tc *tableContext) noteQuiet(msg Message) {
+	if msg.TimestampMS > tc.previousLatest(msg.ThreadID) {
+		tc.quiet[msg.ThreadID] = append(tc.quiet[msg.ThreadID], msg)
+	}
 }
 
 func (tc *tableContext) threadID(key int64) string {
@@ -57,6 +74,8 @@ func (b *MetaBackend) handleTable(tbl *table.LSTable, mode tableMode) {
 		active:        make(map[int64]bool),
 		upserted:      make(map[string]bool),
 		historyMsgs:   make(map[string]bool),
+		latestBefore:  make(map[string]int64),
+		quiet:         make(map[string][]Message),
 	}
 	tc.collectActive(tbl)
 	tc.handleHybrid(tbl)
@@ -73,6 +92,9 @@ func (b *MetaBackend) handleTable(tbl *table.LSTable, mode tableMode) {
 	tc.handleReceipts(tbl)
 	tc.handleEphemeral(tbl)
 
+	for id, msgs := range tc.quiet {
+		b.out.Emit(EventBackfilled, MessagesBackfilledEvent{ThreadID: id, Messages: msgs})
+	}
 	ids := make([]string, 0, len(tc.changed))
 	for id := range tc.changed {
 		ids = append(ids, id)
@@ -422,6 +444,7 @@ func (tc *tableContext) handleMessages(tbl *table.LSTable) {
 	upsert, insert := tbl.WrapMessages()
 	for key, um := range upsert {
 		id := tc.threadID(key)
+		tc.previousLatest(id)
 		for _, wm := range um.Messages {
 			if wm.LSInsertMessage == nil || wm.MessageId == "" || tc.applyPoll(id, wm) {
 				continue
@@ -432,7 +455,9 @@ func (tc *tableContext) handleMessages(tbl *table.LSTable) {
 			}
 			tc.historyMsgs[msg.ID] = true
 			prev, existed := store.PutMessage(msg)
-			if existed && messageChanged(prev, msg) {
+			if !existed {
+				tc.noteQuiet(msg)
+			} else if messageChanged(prev, msg) {
 				b.emitMessage(EventMessageUpdate, msg)
 			}
 		}
@@ -456,6 +481,7 @@ func (tc *tableContext) handleMessages(tbl *table.LSTable) {
 		if store.HasThread(id) {
 			b.applyEphemeral(id, wm)
 		}
+		tc.previousLatest(id)
 		prev, existed := store.PutMessage(msg)
 		if existed {
 			if messageChanged(prev, msg) {
@@ -463,19 +489,19 @@ func (tc *tableContext) handleMessages(tbl *table.LSTable) {
 			}
 			continue
 		}
-		if tc.mode == modeLive {
-			live := isLiveTimestamp(msg.TimestampMS) && !b.lsCatchingUp.Load()
-			if !tc.authoritative[id] {
-				if live {
-					b.applyMessageToThread(msg)
-				} else {
-					b.applyHistoryToThread(msg)
-				}
-				tc.touch(id)
-			}
+		live := tc.mode == modeLive && isLiveTimestamp(msg.TimestampMS) && !b.lsCatchingUp.Load()
+		if tc.mode == modeLive && !tc.authoritative[id] {
 			if live {
-				b.emitMessage(EventMessage, msg)
+				b.applyMessageToThread(msg)
+			} else {
+				b.applyHistoryToThread(msg)
 			}
+			tc.touch(id)
+		}
+		if live {
+			b.emitMessage(EventMessage, msg)
+		} else {
+			tc.noteQuiet(msg)
 		}
 	}
 	for _, edit := range tbl.LSEditMessage {
