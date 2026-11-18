@@ -27,6 +27,7 @@ use crate::{
     style::Palette,
 };
 
+pub(crate) use settings::refresh_form_language;
 pub use widgets::{AvatarSpec, link_color, link_label};
 
 impl Render for MissiveApp {
@@ -49,7 +50,7 @@ impl Render for MissiveApp {
 
         let content = match &self.screen {
             Screen::Starting => {
-                centered(div().text_color(p.text_muted).child("Démarrage…")).into_any_element()
+                centered(div().text_color(p.text_muted).child(ts!("views.starting"))).into_any_element()
             }
             Screen::Fatal(message) => centered(
                 v_flex()
@@ -59,7 +60,7 @@ impl Render for MissiveApp {
                         div()
                             .text_size(px(18.))
                             .font_weight(FontWeight::SEMIBOLD)
-                            .child("Impossible de démarrer"),
+                            .child(ts!("views.fatal.title")),
                     )
                     .child(div().text_color(p.text_muted).child(message.clone())),
             )
@@ -336,7 +337,7 @@ impl MissiveApp {
                             .font_weight(FontWeight::SEMIBOLD)
                             .cursor_pointer()
                             .hover(move |s| s.bg(accent_hover))
-                            .child("Mise à jour prête · Redémarrer")
+                            .child(ts!("views.update_ready"))
                             .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
                             .on_click(cx.listener(|this, _, _, cx| this.restart_to_update(cx))),
                     )
@@ -383,14 +384,14 @@ impl MissiveApp {
                         div()
                             .text_size(px(19.))
                             .font_weight(FontWeight::EXTRA_BOLD)
-                            .child("Restaurer l'historique chiffré"),
+                            .child(ts!("views.pin.title")),
                     )
                     .child(
                         div()
                             .text_size(px(13.5))
                             .line_height(px(21.))
                             .text_color(p.text_muted)
-                            .child("Tes conversations privées sont chiffrées de bout en bout. Pour retrouver leurs messages, Missive restaure ta sauvegarde Messenger avec ton code PIN, celui que messenger.com demande sur un nouvel appareil."),
+                            .child(ts!("views.pin.description")),
                     )
                     .child(Input::new(&self.pin_input).large())
                     .when_some(self.pin_error.clone(), |el, error| {
@@ -400,7 +401,7 @@ impl MissiveApp {
                         div()
                             .text_size(px(12.))
                             .text_color(p.text_faint)
-                            .child("Meta limite le nombre d'essais. En cas de doute, vérifie ton PIN sur messenger.com."),
+                            .child(ts!("views.pin.attempts_warning")),
                     )
                     .child(
                         h_flex()
@@ -409,13 +410,13 @@ impl MissiveApp {
                             .child(
                                 Button::new("pin-later")
                                     .ghost()
-                                    .label("Plus tard")
+                                    .label(t!("views.pin.later"))
                                     .on_click(cx.listener(|this, _, window, cx| this.close_pin(window, cx))),
                             )
                             .child(
                                 Button::new("pin-restore")
                                     .primary()
-                                    .label("Restaurer")
+                                    .label(t!("views.pin.restore"))
                                     .loading(self.pin_busy)
                                     .on_click(cx.listener(|this, _, _, cx| this.restore_history(cx))),
                             ),
@@ -458,13 +459,13 @@ impl MissiveApp {
                                     div()
                                         .text_size(px(26.))
                                         .font_weight(FontWeight::EXTRA_BOLD)
-                                        .child("Bienvenue sur Missive"),
+                                        .child(ts!("views.login.welcome")),
                                 )
                                 .child(
                                     div()
                                         .text_size(px(14.))
                                         .text_color(p.text_muted)
-                                        .child("Messenger, en application native."),
+                                        .child(ts!("views.login.tagline")),
                                 ),
                         ),
                 )
@@ -473,7 +474,7 @@ impl MissiveApp {
                         .primary()
                         .large()
                         .w_full()
-                        .label("Se connecter avec Messenger")
+                        .label(t!("views.login.sign_in"))
                         .loading(self.login_busy && !self.manual_login)
                         .on_click(cx.listener(|this, _, _, cx| this.open_login_window(cx))),
                 )
@@ -488,9 +489,9 @@ impl MissiveApp {
                         .text_color(p.accent_text)
                         .cursor_pointer()
                         .child(if self.manual_login {
-                            "Masquer la saisie manuelle"
+                            ts!("views.login.hide_manual")
                         } else {
-                            "Utiliser des cookies à la place"
+                            ts!("views.login.use_cookies")
                         })
                         .on_click(cx.listener(|this, _, _, cx| {
                             this.manual_login = !this.manual_login;
@@ -503,7 +504,7 @@ impl MissiveApp {
                             .text_size(px(13.))
                             .line_height(px(20.))
                             .text_color(p.text_muted)
-                            .child("Connecte-toi sur messenger.com dans ton navigateur, puis F12 → Application → Cookies, et copie ces trois valeurs."),
+                            .child(ts!("views.login.cookie_instructions")),
                     )
                     .child(
                         v_flex()
@@ -516,7 +517,7 @@ impl MissiveApp {
                         Button::new("login")
                             .outline()
                             .w_full()
-                            .label("Se connecter avec ces cookies")
+                            .label(t!("views.login.sign_in_cookies"))
                             .loading(self.login_busy && self.manual_login)
                             .on_click(cx.listener(|this, _, _, cx| this.login(cx))),
                     )
@@ -525,7 +526,7 @@ impl MissiveApp {
                     div()
                         .text_size(px(12.))
                         .text_color(p.text_faint)
-                        .child("Client non officiel. Meta peut demander une vérification du compte."),
+                        .child(ts!("views.login.disclaimer")),
                 ),
         )
     }

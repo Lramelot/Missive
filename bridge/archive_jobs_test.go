@@ -29,7 +29,7 @@ func TestArchiveSingleFlightAndCancel(t *testing.T) {
 		return d.archive.cancel != nil
 	})
 	_, err := d.SaveMedia(ctx, SaveMediaParams{ThreadID: d.mediaThreadID(), Dir: dir})
-	if body := toErrorBody(err); body.Code != CodeBadRequest || body.Message != "Un export est déjà en cours" {
+	if body := toErrorBody(err); body.Code != CodeBusy {
 		t.Fatalf("a second archive job must be refused while one runs: %v", err)
 	}
 	if res, _ := d.CancelArchive(ctx); !res.Cancelled {

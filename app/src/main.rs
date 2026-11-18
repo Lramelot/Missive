@@ -1,5 +1,12 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+#[macro_use]
+extern crate rust_i18n;
+
+rust_i18n::i18n!("locales", fallback = "en");
+
+#[macro_use]
+mod i18n;
 mod app;
 mod audio;
 mod bridge;
@@ -35,6 +42,8 @@ fn main() {
     velopack.run();
     diagnostics::init();
     diagnostics::wait_for_crashed_instance();
+    let preferences = settings::Settings::load();
+    i18n::apply(preferences.language);
     let Some(instance) = desktop::Instance::acquire() else {
         return;
     };
@@ -46,7 +55,6 @@ fn main() {
         .run(|cx| {
             gpui_kit::init(cx);
             style::register_fonts(cx);
-            let preferences = settings::Settings::load();
             style::apply_theme(preferences.theme, None, cx);
 
             let options = WindowOptions {

@@ -14,6 +14,7 @@ type ExportThreadParams struct {
 	Dir          string `json:"dir"`
 	Format       string `json:"format"`
 	IncludeMedia bool   `json:"include_media"`
+	Locale       string `json:"locale,omitempty"`
 }
 
 type ExportThreadResult struct {
@@ -33,6 +34,7 @@ type SaveMediaParams struct {
 	ThreadID string   `json:"thread_id"`
 	Dir      string   `json:"dir"`
 	Kinds    []string `json:"kinds"`
+	Locale   string   `json:"locale,omitempty"`
 }
 
 type SaveMediaResult struct {

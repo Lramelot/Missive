@@ -13,10 +13,90 @@ import (
 
 const groupGapMS = 5 * 60 * 1000
 
-var (
-	frenchWeekdays = [...]string{"dimanche", "lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi"}
-	frenchMonths   = [...]string{"janvier", "février", "mars", "avril", "mai", "juin", "juillet", "août", "septembre", "octobre", "novembre", "décembre"}
+const (
+	LocaleFrench  = "fr"
+	LocaleEnglish = "en"
 )
+
+type exportText struct {
+	lang            string
+	weekdays        [7]string
+	months          [12]string
+	exportedMeta    string
+	footer          string
+	bubbleLayout    string
+	you             string
+	unknown         string
+	attachments     map[string]string
+	voice           string
+	attachment      string
+	forwardedTag    string
+	forwardedInline string
+	removed         string
+	edited          string
+	poll            string
+	replyFallback   string
+	replyIntro      string
+	replyFallbackMD string
+	reactions       string
+	mediaSuffix     string
+}
+
+var frenchExportText = exportText{
+	lang:            LocaleFrench,
+	weekdays:        [7]string{"dimanche", "lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi"},
+	months:          [12]string{"janvier", "février", "mars", "avril", "mai", "juin", "juillet", "août", "septembre", "octobre", "novembre", "décembre"},
+	exportedMeta:    "%s · exporté le %s à %s depuis Missive",
+	footer:          "Export Missive · %s",
+	bubbleLayout:    "02/01/2006 15:04",
+	you:             "Vous",
+	unknown:         "Inconnu",
+	attachments:     map[string]string{"image": "Photo", "video": "Vidéo", "audio": "Audio", "file": "Fichier", "sticker": "Autocollant", "link": "Lien", "location": "Position", "contact": "Contact", "story": "Story"},
+	voice:           "Message vocal",
+	attachment:      "Pièce jointe",
+	forwardedTag:    "Transféré",
+	forwardedInline: "transféré",
+	removed:         "Message retiré",
+	edited:          "modifié",
+	poll:            "Sondage : ",
+	replyFallback:   "Message",
+	replyIntro:      "En réponse à %s : ",
+	replyFallbackMD: "un message",
+	reactions:       "Réactions : ",
+	mediaSuffix:     " - médias",
+}
+
+var englishExportText = exportText{
+	lang:            LocaleEnglish,
+	weekdays:        [7]string{"Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"},
+	months:          [12]string{"January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"},
+	exportedMeta:    "%s · exported on %s at %s from Missive",
+	footer:          "Missive export · %s",
+	bubbleLayout:    "2006-01-02 15:04",
+	you:             "You",
+	unknown:         "Unknown",
+	attachments:     map[string]string{"image": "Photo", "video": "Video", "audio": "Audio", "file": "File", "sticker": "Sticker", "link": "Link", "location": "Location", "contact": "Contact", "story": "Story"},
+	voice:           "Voice message",
+	attachment:      "Attachment",
+	forwardedTag:    "Forwarded",
+	forwardedInline: "forwarded",
+	removed:         "Message removed",
+	edited:          "edited",
+	poll:            "Poll: ",
+	replyFallback:   "Message",
+	replyIntro:      "In reply to %s: ",
+	replyFallbackMD: "a message",
+	reactions:       "Reactions: ",
+	mediaSuffix:     " - media",
+}
+
+func exportTextFor(locale string) *exportText {
+	lang := strings.ToLower(strings.TrimSpace(locale))
+	if lang == LocaleEnglish || strings.HasPrefix(lang, LocaleEnglish+"-") || strings.HasPrefix(lang, LocaleEnglish+"_") {
+		return &englishExportText
+	}
+	return &frenchExportText
+}
 
 type exportDoc struct {
 	Title      string
@@ -24,25 +104,42 @@ type exportDoc struct {
 	Messages   []Message
 	Files      map[string]string
 	Thread     threadRec
+	Locale     string
 }
 
 func (d exportDoc) file(msg Message, att Attachment) string {
 	return d.Files[mediaKey(msg.ID, att.ID)]
 }
 
-func frenchDay(t time.Time) string {
-	return fmt.Sprintf("%s %d %s %d", frenchWeekdays[t.Weekday()], t.Day(), frenchMonths[t.Month()-1], t.Year())
+func (d exportDoc) text() *exportText {
+	return exportTextFor(d.Locale)
 }
 
-func frenchDate(t time.Time) string {
-	return fmt.Sprintf("%d %s %d", t.Day(), frenchMonths[t.Month()-1], t.Year())
+func (x *exportText) day(t time.Time) string {
+	if x.lang == LocaleEnglish {
+		return fmt.Sprintf("%s, %s %d, %d", x.weekdays[t.Weekday()], x.months[t.Month()-1], t.Day(), t.Year())
+	}
+	return fmt.Sprintf("%s %d %s %d", x.weekdays[t.Weekday()], t.Day(), x.months[t.Month()-1], t.Year())
 }
 
-func frenchCount(n int) string {
+func (x *exportText) date(t time.Time) string {
+	if x.lang == LocaleEnglish {
+		return fmt.Sprintf("%s %d, %d", x.months[t.Month()-1], t.Day(), t.Year())
+	}
+	return fmt.Sprintf("%d %s %d", t.Day(), x.months[t.Month()-1], t.Year())
+}
+
+func (x *exportText) exportedLine(doc exportDoc) string {
+	return fmt.Sprintf(x.exportedMeta, x.plural(len(doc.Messages), "message", "messages"), x.date(doc.ExportedAt), doc.ExportedAt.Format("15:04"))
+}
+
+func (x *exportText) count(n int) string {
 	s := strconv.Itoa(n)
 	var b strings.Builder
 	for i, r := range s {
-		if i > 0 && (len(s)-i)%3 == 0 {
+		if i > 0 && (len(s)-i)%3 == 0 && x.lang == LocaleEnglish {
+			b.WriteString(",")
+		} else if i > 0 && (len(s)-i)%3 == 0 {
 			b.WriteString(" ")
 		}
 		b.WriteRune(r)
@@ -50,11 +147,11 @@ func frenchCount(n int) string {
 	return b.String()
 }
 
-func plural(n int, one, many string) string {
-	if n <= 1 {
-		return frenchCount(n) + " " + one
+func (x *exportText) plural(n int, one, many string) string {
+	if n == 1 || (n <= 1 && x.lang != LocaleEnglish) {
+		return x.count(n) + " " + one
 	}
-	return frenchCount(n) + " " + many
+	return x.count(n) + " " + many
 }
 
 func localTime(ms int64) time.Time {
@@ -65,41 +162,24 @@ func sameDay(a, b time.Time) bool {
 	return a.Year() == b.Year() && a.YearDay() == b.YearDay()
 }
 
-func senderLabel(msg Message) string {
+func (x *exportText) senderLabel(msg Message) string {
 	if name := strings.TrimSpace(msg.SenderName); name != "" {
 		return name
 	}
 	if msg.IsOutgoing {
-		return "Vous"
+		return x.you
 	}
-	return "Inconnu"
+	return x.unknown
 }
 
-func attachmentLabel(att Attachment) string {
-	switch att.Kind {
-	case "image":
-		return "Photo"
-	case "video":
-		return "Vidéo"
-	case "audio":
-		if att.Voice {
-			return "Message vocal"
-		}
-		return "Audio"
-	case "file":
-		return "Fichier"
-	case "sticker":
-		return "Autocollant"
-	case "link":
-		return "Lien"
-	case "location":
-		return "Position"
-	case "contact":
-		return "Contact"
-	case "story":
-		return "Story"
+func (x *exportText) attachmentLabel(att Attachment) string {
+	if att.Kind == "audio" && att.Voice {
+		return x.voice
 	}
-	return "Pièce jointe"
+	if label, ok := x.attachments[att.Kind]; ok {
+		return label
+	}
+	return x.attachment
 }
 
 func webURL(raw string) string {
@@ -156,14 +236,15 @@ footer{padding-top:28px;padding-bottom:36px;color:var(--muted);font-size:12px}
 `
 
 func renderExportHTML(w io.Writer, doc exportDoc) error {
+	x := doc.text()
 	var b strings.Builder
-	b.WriteString("<!doctype html>\n<html lang=\"fr\">\n<head>\n<meta charset=\"utf-8\">\n")
+	b.WriteString("<!doctype html>\n<html lang=\"" + x.lang + "\">\n<head>\n<meta charset=\"utf-8\">\n")
 	b.WriteString("<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n")
 	b.WriteString("<meta http-equiv=\"Content-Security-Policy\" content=\"default-src 'none'; style-src 'unsafe-inline'; img-src 'self' file: data:; media-src 'self' file:\">\n")
 	b.WriteString("<meta name=\"color-scheme\" content=\"light dark\">\n")
 	b.WriteString("<title>" + esc(doc.Title) + "</title>\n<style>\n" + exportCSS + "</style>\n</head>\n<body>\n<header>\n")
 	b.WriteString("<h1>" + esc(doc.Title) + "</h1>\n")
-	b.WriteString("<p class=\"meta\">" + esc(plural(len(doc.Messages), "message", "messages")) + " · exporté le " + esc(frenchDate(doc.ExportedAt)) + " à " + doc.ExportedAt.Format("15:04") + " depuis Missive</p>\n")
+	b.WriteString("<p class=\"meta\">" + esc(x.exportedLine(doc)) + "</p>\n")
 	b.WriteString("</header>\n<main>\n")
 	var prev *Message
 	for i := range doc.Messages {
@@ -171,7 +252,7 @@ func renderExportHTML(w io.Writer, doc exportDoc) error {
 		t := localTime(msg.TimestampMS)
 		newDay := prev == nil || !sameDay(localTime(prev.TimestampMS), t)
 		if newDay {
-			b.WriteString("<h2 class=\"day\">" + esc(frenchDay(t)) + "</h2>\n")
+			b.WriteString("<h2 class=\"day\">" + esc(x.day(t)) + "</h2>\n")
 		}
 		if msg.System {
 			b.WriteString("<p class=\"system\">" + esc(msg.Text) + " · " + t.Format("15:04") + "</p>\n")
@@ -188,9 +269,9 @@ func renderExportHTML(w io.Writer, doc exportDoc) error {
 		}
 		b.WriteString("<article class=\"" + class + "\" id=\"m-" + esc(msg.ID) + "\">\n")
 		if first {
-			b.WriteString("<div class=\"who\">" + esc(senderLabel(msg)) + " · <time datetime=\"" + t.Format(time.RFC3339) + "\">" + t.Format("15:04") + "</time></div>\n")
+			b.WriteString("<div class=\"who\">" + esc(x.senderLabel(msg)) + " · <time datetime=\"" + t.Format(time.RFC3339) + "\">" + t.Format("15:04") + "</time></div>\n")
 		}
-		b.WriteString("<div class=\"bubble\" title=\"" + t.Format("02/01/2006 15:04") + "\">")
+		b.WriteString("<div class=\"bubble\" title=\"" + t.Format(x.bubbleLayout) + "\">")
 		writeHTMLBody(&b, doc, msg)
 		b.WriteString("</div>\n")
 		if len(msg.Reactions) > 0 {
@@ -203,46 +284,47 @@ func renderExportHTML(w io.Writer, doc exportDoc) error {
 		b.WriteString("</article>\n")
 		prev = &doc.Messages[i]
 	}
-	b.WriteString("</main>\n<footer>Export Missive · " + esc(frenchDate(doc.ExportedAt)) + "</footer>\n</body>\n</html>\n")
+	b.WriteString("</main>\n<footer>" + esc(fmt.Sprintf(x.footer, x.date(doc.ExportedAt))) + "</footer>\n</body>\n</html>\n")
 	_, err := io.WriteString(w, b.String())
 	return err
 }
 
 func writeHTMLBody(b *strings.Builder, doc exportDoc, msg Message) {
+	x := doc.text()
 	if msg.Forwarded {
-		b.WriteString("<div class=\"tag\">Transféré</div>")
+		b.WriteString("<div class=\"tag\">" + esc(x.forwardedTag) + "</div>")
 	}
 	if msg.ReplyTo != nil {
 		quoted := msg.ReplyTo.Text
 		if strings.TrimSpace(quoted) == "" && msg.ReplyTo.Kind != "" {
-			quoted = attachmentLabel(Attachment{Kind: msg.ReplyTo.Kind})
+			quoted = x.attachmentLabel(Attachment{Kind: msg.ReplyTo.Kind})
 		}
-		b.WriteString("<blockquote class=\"reply\"><span class=\"rs\">" + esc(cmpOr(msg.ReplyTo.SenderName, "Message")) + "</span>" + esc(quoted) + "</blockquote>")
+		b.WriteString("<blockquote class=\"reply\"><span class=\"rs\">" + esc(cmpOr(msg.ReplyTo.SenderName, x.replyFallback)) + "</span>" + esc(quoted) + "</blockquote>")
 	}
 	if msg.Deleted {
-		b.WriteString("<p class=\"text deleted\">Message retiré</p>")
+		b.WriteString("<p class=\"text deleted\">" + esc(x.removed) + "</p>")
 		return
 	}
 	if msg.Text != "" {
 		b.WriteString("<p class=\"text\">" + esc(msg.Text) + "</p>")
 	}
 	for _, att := range msg.Attachments {
-		writeHTMLAttachment(b, doc.file(msg, att), att)
+		writeHTMLAttachment(b, x, doc.file(msg, att), att)
 	}
 	if msg.Poll != nil {
-		b.WriteString("<p class=\"text\">Sondage : " + esc(msg.Poll.Question) + "</p><ul class=\"poll\">")
+		b.WriteString("<p class=\"text\">" + esc(x.poll) + esc(msg.Poll.Question) + "</p><ul class=\"poll\">")
 		for _, opt := range msg.Poll.Options {
-			b.WriteString("<li>" + esc(opt.Text) + " — " + esc(plural(opt.VoteCount, "vote", "votes")) + "</li>")
+			b.WriteString("<li>" + esc(opt.Text) + " — " + esc(x.plural(opt.VoteCount, "vote", "votes")) + "</li>")
 		}
 		b.WriteString("</ul>")
 	}
 	if msg.Edited {
-		b.WriteString("<span class=\"edited\">modifié</span>")
+		b.WriteString("<span class=\"edited\">" + esc(x.edited) + "</span>")
 	}
 }
 
-func writeHTMLAttachment(b *strings.Builder, rel string, att Attachment) {
-	label := attachmentLabel(att)
+func writeHTMLAttachment(b *strings.Builder, x *exportText, rel string, att Attachment) {
+	label := x.attachmentLabel(att)
 	name := cmpOr(att.FileName, label)
 	if rel != "" {
 		href := esc(relHref(rel))
@@ -332,51 +414,52 @@ func orderedMarkerEnd(s string) int {
 }
 
 func renderExportMarkdown(w io.Writer, doc exportDoc) error {
+	x := doc.text()
 	var b strings.Builder
 	b.WriteString("# " + mdEscape(doc.Title) + "\n\n")
-	b.WriteString("_" + plural(len(doc.Messages), "message", "messages") + " · exporté le " + frenchDate(doc.ExportedAt) + " à " + doc.ExportedAt.Format("15:04") + " depuis Missive_\n")
+	b.WriteString("_" + x.exportedLine(doc) + "_\n")
 	var prev *Message
 	for i := range doc.Messages {
 		msg := doc.Messages[i]
 		t := localTime(msg.TimestampMS)
 		if prev == nil || !sameDay(localTime(prev.TimestampMS), t) {
-			b.WriteString("\n## " + frenchDay(t) + "\n")
+			b.WriteString("\n## " + x.day(t) + "\n")
 		}
 		prev = &doc.Messages[i]
 		if msg.System {
 			b.WriteString("\n_" + mdEscape(msg.Text) + " · " + t.Format("15:04") + "_\n")
 			continue
 		}
-		b.WriteString("\n**" + mdEscape(senderLabel(msg)) + "** · " + t.Format("15:04"))
+		b.WriteString("\n**" + mdEscape(x.senderLabel(msg)) + "** · " + t.Format("15:04"))
 		if msg.Forwarded {
-			b.WriteString(" · transféré")
+			b.WriteString(" · " + x.forwardedInline)
 		}
 		if msg.Edited {
-			b.WriteString(" · modifié")
+			b.WriteString(" · " + x.edited)
 		}
 		b.WriteString("\n")
 		if msg.ReplyTo != nil {
 			quoted := msg.ReplyTo.Text
 			if strings.TrimSpace(quoted) == "" && msg.ReplyTo.Kind != "" {
-				quoted = attachmentLabel(Attachment{Kind: msg.ReplyTo.Kind})
+				quoted = x.attachmentLabel(Attachment{Kind: msg.ReplyTo.Kind})
 			}
-			b.WriteString("> En réponse à " + mdEscape(cmpOr(msg.ReplyTo.SenderName, "un message")) + " : " + strings.ReplaceAll(mdText(quoted), "\n", "\n> ") + "\n")
+			b.WriteString("> " + fmt.Sprintf(x.replyIntro, mdEscape(cmpOr(msg.ReplyTo.SenderName, x.replyFallbackMD))) + strings.ReplaceAll(mdText(quoted), "\n", "\n> ") + "\n")
 			b.WriteString("\n")
 		}
 		if msg.Deleted {
-			b.WriteString("_Message retiré_\n")
+			b.WriteString("_" + x.removed + "_\n")
 			continue
 		}
 		if msg.Text != "" {
 			b.WriteString(mdText(msg.Text) + "\n")
 		}
 		for _, att := range msg.Attachments {
-			b.WriteString(markdownAttachment(doc.file(msg, att), att) + "\n")
+			b.WriteString(markdownAttachment(x, doc.file(msg, att), att) + "\n")
 		}
 		if msg.Poll != nil {
-			b.WriteString("Sondage : " + mdEscape(msg.Poll.Question) + "\n")
+			b.WriteString(x.poll + mdEscape(msg.Poll.Question) + "\n")
 			for _, opt := range msg.Poll.Options {
-				b.WriteString("- " + mdEscape(opt.Text) + " — " + plural(opt.VoteCount, "vote", "votes") + "\n")
+				b.WriteString("- " + mdEscape(opt.Text) + " — " + x.plural(opt.VoteCount, "vote", "votes") + "\n")
 			}
 		}
 		if len(msg.Reactions) > 0 {
@@ -384,15 +467,15 @@ func renderExportMarkdown(w io.Writer, doc exportDoc) error {
 			for _, r := range msg.Reactions {
 				parts = append(parts, mdEscape(r.Emoji)+" "+strconv.Itoa(max(r.Count, 1)))
 			}
-			b.WriteString("\nRéactions : " + strings.Join(parts, " · ") + "\n")
+			b.WriteString("\n" + x.reactions + strings.Join(parts, " · ") + "\n")
 		}
 	}
 	_, err := io.WriteString(w, b.String())
 	return err
 }
 
-func markdownAttachment(rel string, att Attachment) string {
-	label := attachmentLabel(att)
+func markdownAttachment(x *exportText, rel string, att Attachment) string {
+	label := x.attachmentLabel(att)
 	name := mdEscape(cmpOr(att.FileName, label))
 	if rel != "" {
 		if att.Kind == "image" || att.Kind == "sticker" {

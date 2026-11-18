@@ -1,0 +1,537 @@
+_version: 2
+export:
+  format:
+    html:
+      label:
+        en: "Web page (HTML)"
+        fr: "Page web (HTML)"
+      hint:
+        en: "Readable in a browser and printable"
+        fr: "Lisible dans un navigateur et imprimable"
+    markdown:
+      label:
+        en: "Text (Markdown)"
+        fr: "Texte (Markdown)"
+      hint:
+        en: "Plain text, easy to reread or archive"
+        fr: "Texte simple, facile à relire ou à archiver"
+    json:
+      label:
+        en: "Data (JSON)"
+        fr: "Données (JSON)"
+      hint:
+        en: "All the data, for automated processing"
+        fr: "Toutes les données, pour un traitement automatique"
+  messages:
+    one:
+      en: "%{grouped} message"
+      fr: "%{grouped} message"
+    other:
+      en: "%{grouped} messages"
+      fr: "%{grouped} messages"
+  media:
+    one:
+      en: "%{grouped} media file"
+      fr: "%{grouped} média"
+    other:
+      en: "%{grouped} media files"
+      fr: "%{grouped} médias"
+  not_downloaded:
+    one:
+      en: "%{grouped} not downloaded"
+      fr: "%{grouped} non téléchargé"
+    other:
+      en: "%{grouped} not downloaded"
+      fr: "%{grouped} non téléchargés"
+  already_running:
+    en: "An export is already in progress"
+    fr: "Un export est déjà en cours"
+  busy:
+    en: "An export or a download is already in progress."
+    fr: "Un export ou un téléchargement est déjà en cours."
+  default_thread_name:
+    en: "Conversation"
+    fr: "Conversation"
+  pick_folder_prompt:
+    en: "Choose this folder"
+    fr: "Choisir ce dossier"
+  save_here_prompt:
+    en: "Save here"
+    fr: "Enregistrer ici"
+  cancelled:
+    en: "Export cancelled"
+    fr: "Export annulé"
+  done:
+    en: "“%{name}” exported: %{count}"
+    fr: "« %{name} » exportée : %{count}"
+  failed:
+    en: "Export failed: %{error}"
+    fr: "Export impossible : %{error}"
+  cancel_failed:
+    en: "Couldn't cancel: %{error}"
+    fr: "Annulation impossible : %{error}"
+  download_cancelled:
+    en: "Download cancelled"
+    fr: "Téléchargement annulé"
+  saved:
+    en: "“%{name}”: %{count} saved"
+    fr: "« %{name} » : %{count} enregistrés"
+  saved_failed:
+    en: ", %{count} failed"
+    fr: ", %{count} en échec"
+  download_failed:
+    en: "Download failed: %{error}"
+    fr: "Téléchargement impossible : %{error}"
+message_ops:
+  confirm:
+    unsend:
+      question:
+        en: "Unsend this message for everyone?"
+        fr: "Retirer ce message pour tout le monde ?"
+      button:
+        en: "Unsend"
+        fr: "Retirer"
+    delete:
+      question:
+        en: "Delete this message for you?"
+        fr: "Supprimer ce message pour vous ?"
+      button:
+        en: "Delete"
+        fr: "Supprimer"
+  copy:
+    nothing:
+      en: "No text to copy"
+      fr: "Aucun texte à copier"
+    done:
+      en: "Text copied"
+      fr: "Texte copié"
+  edit:
+    failed:
+      en: "Couldn't edit: %{error}"
+      fr: "Modification impossible : %{error}"
+    rejected:
+      en: "Messenger rejected the edit"
+      fr: "Messenger a refusé la modification"
+  unsend:
+    failed:
+      en: "Couldn't unsend: %{error}"
+      fr: "Retrait impossible : %{error}"
+  delete:
+    failed:
+      en: "Couldn't delete: %{error}"
+      fr: "Suppression impossible : %{error}"
+  forward:
+    search_placeholder:
+      en: "Search conversations"
+      fr: "Rechercher une discussion"
+    max:
+      en: "%{max} conversations at most"
+      fr: "%{max} conversations au maximum"
+    done_many:
+      en: "Message forwarded to %{count} conversations"
+      fr: "Message transféré dans %{count} conversations"
+    done_one:
+      en: "Message forwarded"
+      fr: "Message transféré"
+    failed:
+      en: "Couldn't forward: %{error}"
+      fr: "Transfert impossible : %{error}"
+  poll:
+    option_placeholder:
+      en: "Option"
+      fr: "Option"
+    question_placeholder:
+      en: "Ask a question"
+      fr: "Posez une question"
+    incomplete:
+      en: "A question and at least two options are required."
+      fr: "Une question et au moins deux options sont nécessaires."
+    created:
+      en: "Poll created"
+      fr: "Sondage créé"
+    vote_failed:
+      en: "Couldn't vote: %{error}"
+      fr: "Vote impossible : %{error}"
+  jump:
+    searching:
+      en: "Looking for the original message…"
+      fr: "Recherche du message d'origine…"
+    not_found:
+      en: "Original message not found"
+      fr: "Message d'origine introuvable"
+message_dialogs:
+  cancel:
+    en: "Cancel"
+    fr: "Annuler"
+  menu:
+    remind_me:
+      en: "Remind me"
+      fr: "Me le rappeler"
+    pick_time:
+      en: "Pick…"
+      fr: "Choisir…"
+    reply:
+      en: "Reply"
+      fr: "Répondre"
+    react:
+      en: "React"
+      fr: "Réagir"
+    copy_text:
+      en: "Copy text"
+      fr: "Copier le texte"
+    forward:
+      en: "Forward"
+      fr: "Transférer"
+    edit:
+      en: "Edit"
+      fr: "Modifier"
+    cancel_reminder:
+      en: "Cancel reminder (%{when})"
+      fr: "Annuler le rappel (%{when})"
+    remove_favorite:
+      en: "Remove from favorites"
+      fr: "Retirer des favoris"
+    add_favorite:
+      en: "Add to favorites"
+      fr: "Ajouter aux favoris"
+    unsend:
+      en: "Unsend for everyone"
+      fr: "Retirer pour tout le monde"
+    delete_for_me:
+      en: "Delete for me"
+      fr: "Supprimer pour moi"
+  seen_by:
+    title:
+      en: "Seen by"
+      fr: "Vu par"
+    verb_seen:
+      en: "Seen"
+      fr: "Vu"
+    verb_delivered:
+      en: "Received"
+      fr: "Reçu"
+    participant:
+      en: "Participant"
+      fr: "Participant"
+    section_seen:
+      en: "Seen · %{count}"
+      fr: "Vu · %{count}"
+    section_delivered:
+      en: "Delivered · %{count}"
+      fr: "Distribué · %{count}"
+    nobody:
+      en: "Nobody has seen this message yet."
+      fr: "Personne n'a encore vu ce message."
+  forward:
+    title:
+      en: "Forward"
+      fr: "Transférer"
+    no_results:
+      en: "No conversations"
+      fr: "Aucune discussion"
+    you:
+      en: "You"
+      fr: "Vous"
+    choose:
+      en: "Choose up to 10 conversations"
+      fr: "Choisissez jusqu'à 10 conversations"
+    selected:
+      one:
+        en: "%{count} conversation"
+        fr: "%{count} conversation"
+      other:
+        en: "%{count} conversations"
+        fr: "%{count} conversations"
+    send:
+      en: "Send"
+      fr: "Envoyer"
+  poll:
+    title:
+      en: "New poll"
+      fr: "Nouveau sondage"
+    question:
+      en: "Question"
+      fr: "Question"
+    options:
+      en: "Options"
+      fr: "Options"
+    add_option:
+      en: "Add an option"
+      fr: "Ajouter une option"
+    create:
+      en: "Create"
+      fr: "Créer"
+  pinned:
+    removed:
+      en: "Message removed"
+      fr: "Message retiré"
+    message:
+      en: "Message"
+      fr: "Message"
+    label_short:
+      en: "Pinned"
+      fr: "Épinglé"
+    label_long:
+      en: "Pinned message"
+      fr: "Message épinglé"
+    show:
+      en: "Show"
+      fr: "Afficher"
+    count:
+      en: "%{count} pinned"
+      fr: "%{count} épinglés"
+message:
+  delivery:
+    sent:
+      en: "Sent"
+      fr: "Envoyé"
+    seen:
+      en: "Seen"
+      fr: "Vu"
+    seen_by_everyone:
+      en: "Seen by everyone"
+      fr: "Vu par tout le monde"
+    seen_by_count:
+      en: "Seen by %{count}"
+      fr: "Vu par %{count}"
+    delivered:
+      en: "Delivered"
+      fr: "Distribué"
+  status:
+    waiting_for_connection:
+      en: "Waiting for connection"
+      fr: "En attente de connexion"
+    cancel:
+      en: "Cancel"
+      fr: "Annuler"
+    sending:
+      en: "Sending…"
+      fr: "Envoi…"
+    retry:
+      en: "Retry"
+      fr: "Réessayer"
+  quote:
+    photo:
+      en: "Photo"
+      fr: "Photo"
+    video:
+      en: "Video"
+      fr: "Vidéo"
+    voice:
+      en: "Voice message"
+      fr: "Message vocal"
+    link:
+      en: "Link"
+      fr: "Lien"
+    location:
+      en: "Location"
+      fr: "Position"
+    attachment:
+      en: "Attachment"
+      fr: "Pièce jointe"
+    message:
+      en: "Message"
+      fr: "Message"
+    reply:
+      en: "Reply"
+      fr: "Réponse"
+    you:
+      en: "You"
+      fr: "Vous"
+  forwarded:
+    en: "Forwarded"
+    fr: "Transféré"
+  removed:
+    en: "Message removed"
+    fr: "Message retiré"
+  edited:
+    en: "edited"
+    fr: "modifié"
+  unsupported:
+    en: "Unsupported message"
+    fr: "Message non pris en charge"
+  attachment:
+    location:
+      en: "Location"
+      fr: "Position"
+    story:
+      en: "Story"
+      fr: "Story"
+    contact:
+      en: "Contact"
+      fr: "Contact"
+  poll:
+    no_votes:
+      en: "No votes"
+      fr: "Aucun vote"
+    votes:
+      one:
+        en: "%{count} vote"
+        fr: "%{count} vote"
+      other:
+        en: "%{count} votes"
+        fr: "%{count} votes"
+  image_unavailable:
+    en: "Image unavailable"
+    fr: "Image indisponible"
+  video_opening:
+    en: "Opening…"
+    fr: "Ouverture…"
+  chip:
+    voice:
+      en: "Voice message"
+      fr: "Message vocal"
+    voice_with_duration:
+      en: "Voice message · %{duration}"
+      fr: "Message vocal · %{duration}"
+    video:
+      en: "Video"
+      fr: "Vidéo"
+    video_with_duration:
+      en: "Video · %{duration}"
+      fr: "Vidéo · %{duration}"
+    shared_content:
+      en: "Shared content"
+      fr: "Contenu partagé"
+  reactions:
+    you_click_to_remove:
+      en: "You · click to remove"
+      fr: "Vous · cliquer pour retirer"
+    others:
+      one:
+        en: "%{count} other person"
+        fr: "%{count} autre personne"
+      other:
+        en: "%{count} other people"
+        fr: "%{count} autres personnes"
+views:
+  starting:
+    en: "Starting…"
+    fr: "Démarrage…"
+  fatal:
+    title:
+      en: "Couldn't start"
+      fr: "Impossible de démarrer"
+  update_ready:
+    en: "Update ready · Restart"
+    fr: "Mise à jour prête · Redémarrer"
+  pin:
+    title:
+      en: "Restore encrypted history"
+      fr: "Restaurer l'historique chiffré"
+    description:
+      en: "Your private conversations are end-to-end encrypted. To get their messages back, Missive restores your Messenger backup with your PIN, the one messenger.com asks for on a new device."
+      fr: "Tes conversations privées sont chiffrées de bout en bout. Pour retrouver leurs messages, Missive restaure ta sauvegarde Messenger avec ton code PIN, celui que messenger.com demande sur un nouvel appareil."
+    attempts_warning:
+      en: "Meta limits the number of attempts. If in doubt, check your PIN on messenger.com."
+      fr: "Meta limite le nombre d'essais. En cas de doute, vérifie ton PIN sur messenger.com."
+    later:
+      en: "Later"
+      fr: "Plus tard"
+    restore:
+      en: "Restore"
+      fr: "Restaurer"
+  login:
+    welcome:
+      en: "Welcome to Missive"
+      fr: "Bienvenue sur Missive"
+    tagline:
+      en: "Messenger, as a native app."
+      fr: "Messenger, en application native."
+    sign_in:
+      en: "Sign in with Messenger"
+      fr: "Se connecter avec Messenger"
+    hide_manual:
+      en: "Hide manual entry"
+      fr: "Masquer la saisie manuelle"
+    use_cookies:
+      en: "Use cookies instead"
+      fr: "Utiliser des cookies à la place"
+    cookie_instructions:
+      en: "Sign in on messenger.com in your browser, then press F12 → Application → Cookies, and copy these three values."
+      fr: "Connecte-toi sur messenger.com dans ton navigateur, puis F12 → Application → Cookies, et copie ces trois valeurs."
+    sign_in_cookies:
+      en: "Sign in with these cookies"
+      fr: "Se connecter avec ces cookies"
+    disclaimer:
+      en: "Unofficial client. Meta may ask for an account verification."
+      fr: "Client non officiel. Meta peut demander une vérification du compte."
+popout:
+  composer_placeholder:
+    en: "Write a message"
+    fr: "Écrire un message"
+  jump_to_latest:
+    en: "Latest messages"
+    fr: "Derniers messages"
+  open_failed:
+    en: "Couldn't open the window"
+    fr: "Fenêtre impossible à ouvrir"
+widgets:
+  link:
+    connecting:
+      en: "Connecting to Messenger…"
+      fr: "Connexion à Messenger…"
+    reconnecting:
+      en: "Connection lost, retrying…"
+      fr: "Connexion perdue, nouvelle tentative…"
+    error_detail:
+      en: "Error: %{detail}"
+      fr: "Erreur : %{detail}"
+    error:
+      en: "Connection error"
+      fr: "Erreur de connexion"
+    online:
+      en: "Online"
+      fr: "En ligne"
+  weekday_short:
+    mon:
+      en: "Mon"
+      fr: "lun."
+    tue:
+      en: "Tue"
+      fr: "mar."
+    wed:
+      en: "Wed"
+      fr: "mer."
+    thu:
+      en: "Thu"
+      fr: "jeu."
+    fri:
+      en: "Fri"
+      fr: "ven."
+    sat:
+      en: "Sat"
+      fr: "sam."
+    sun:
+      en: "Sun"
+      fr: "dim."
+  time:
+    now:
+      en: "now"
+      fr: "maintenant"
+    minutes_ago:
+      en: "%{minutes} min"
+      fr: "%{minutes} min"
+    yesterday:
+      en: "Yesterday"
+      fr: "Hier"
+  date:
+    day_month:
+      en: "%{month} %{day}"
+      fr: "%{day} %{month}"
+  separator:
+    today:
+      en: "Today · %{clock}"
+      fr: "Aujourd'hui · %{clock}"
+    yesterday:
+      en: "Yesterday · %{clock}"
+      fr: "Hier · %{clock}"
+    weekday:
+      en: "%{weekday} · %{clock}"
+      fr: "%{weekday} · %{clock}"
+    day_month:
+      en: "%{month} %{day} · %{clock}"
+      fr: "%{day} %{month} · %{clock}"
+    day_month_year:
+      en: "%{month} %{day}, %{year} · %{clock}"
+      fr: "%{day} %{month} %{year} · %{clock}"

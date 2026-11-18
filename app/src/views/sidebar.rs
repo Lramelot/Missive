@@ -37,21 +37,21 @@ impl MissiveApp {
         let in_folder = self.active_folder().is_some()
             && matches!(self.filter, Filter::All | Filter::Unread | Filter::Groups);
         let empty_label = match self.filter {
-            Filter::Requests => "Aucune demande de message",
-            Filter::Archived => "Aucune discussion archivée",
-            _ if in_folder => "Aucune discussion dans ce dossier. Ajoutez-en par clic droit sur une discussion.",
-            Filter::Unread => "Aucune discussion non lue",
-            Filter::Groups => "Aucun groupe",
-            Filter::All => "Aucune discussion",
+            Filter::Requests => ts!("sidebar.empty.requests"),
+            Filter::Archived => ts!("sidebar.empty.archived"),
+            _ if in_folder => ts!("sidebar.empty.folder"),
+            Filter::Unread => ts!("sidebar.empty.unread"),
+            Filter::Groups => ts!("sidebar.empty.groups"),
+            Filter::All => ts!("sidebar.empty.all"),
         };
         let has_filters = self.thread_ops.search.query.has_filters();
         let searching = self.thread_ops.search.loading;
         let filters_hover = p.hover;
 
         let title = match self.filter {
-            Filter::Requests => "Demandes",
-            Filter::Archived => "Archivées",
-            Filter::All | Filter::Unread | Filter::Groups => "Discussions",
+            Filter::Requests => ts!("sidebar.title.requests"),
+            Filter::Archived => ts!("sidebar.title.archived"),
+            Filter::All | Filter::Unread | Filter::Groups => ts!("sidebar.title.chats"),
         };
         let folder = matches!(self.filter, Filter::Requests | Filter::Archived);
         let accent_hover = p.accent_strong;
@@ -87,7 +87,7 @@ impl MissiveApp {
                             .justify_center()
                             .cursor_pointer()
                             .hover(move |style| style.bg(accent_hover))
-                            .tooltip(|window, cx| Tooltip::new("Nouveau message").build(window, cx))
+                            .tooltip(|window, cx| Tooltip::new(ts!("sidebar.new_message")).build(window, cx))
                             .child(
                                 Icon::new(IconName::SquarePen)
                                     .size(px(18.))
@@ -154,7 +154,7 @@ impl MissiveApp {
                                 el.hover(move |style| style.bg(filters_hover))
                             })
                             .tooltip(|window, cx| {
-                                Tooltip::new("Filtres de recherche").build(window, cx)
+                                Tooltip::new(ts!("sidebar.search_filters")).build(window, cx)
                             })
                             .child(Icon::new(IconName::SlidersHorizontal).size(px(15.)).text_color(
                                 if has_filters {
@@ -233,7 +233,7 @@ impl MissiveApp {
             .gap(px(6.))
             .pt(px(8.))
             .child(
-                rail_button("rail-discussions", IconName::MessageCircle, "Discussions", discussions, p)
+                rail_button("rail-discussions", IconName::MessageCircle, ts!("sidebar.rail.chats"), discussions, p)
                     .on_click(cx.listener(|this, _, _, cx| {
                         if matches!(this.filter, Filter::Requests | Filter::Archived) {
                             this.set_filter(Filter::All, cx);
@@ -244,7 +244,7 @@ impl MissiveApp {
                 rail_button(
                     "rail-requests",
                     IconName::Inbox,
-                    "Demandes de message",
+                    ts!("sidebar.rail.requests"),
                     self.filter == Filter::Requests,
                     p,
                 )
@@ -281,18 +281,18 @@ impl MissiveApp {
                 rail_button(
                     "rail-archived",
                     IconName::Archive,
-                    "Archivées",
+                    ts!("sidebar.rail.archived"),
                     self.filter == Filter::Archived,
                     p,
                 )
                 .on_click(cx.listener(|this, _, _, cx| this.set_filter(Filter::Archived, cx))),
             )
             .child(
-                rail_button("rail-favorites", IconName::Star, "Favoris", false, p)
+                rail_button("rail-favorites", IconName::Star, ts!("sidebar.rail.favorites"), false, p)
                     .on_click(cx.listener(|this, _, _, cx| this.open_favorites(cx))),
             )
             .child(
-                rail_button("rail-scheduled", IconName::Clock, "Programmés", false, p)
+                rail_button("rail-scheduled", IconName::Clock, ts!("sidebar.rail.scheduled"), false, p)
                     .on_click(cx.listener(|this, _, _, cx| this.open_scheduled(cx))),
             )
             .child(div().flex_1())
@@ -300,7 +300,11 @@ impl MissiveApp {
                 rail_button(
                     "rail-theme",
                     if dark { IconName::Sun } else { IconName::Moon },
-                    if dark { "Thème clair" } else { "Thème sombre" },
+                    if dark {
+                        ts!("sidebar.rail.light_theme")
+                    } else {
+                        ts!("sidebar.rail.dark_theme")
+                    },
                     false,
                     p,
                 )
@@ -317,7 +321,7 @@ impl MissiveApp {
                 rail_button(
                     "rail-settings",
                     IconName::SlidersHorizontal,
-                    "Paramètres",
+                    ts!("sidebar.rail.settings"),
                     self.settings_open,
                     p,
                 )
@@ -356,7 +360,7 @@ impl MissiveApp {
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let view = cx.entity();
-        let header = |label: &'static str| {
+        let header = |label: SharedString| {
             div()
                 .px_5()
                 .pt_3()
@@ -407,11 +411,11 @@ impl MissiveApp {
         let status: SharedString = if let Some(problem) = self.search_problem_text() {
             problem.into()
         } else if search.loading {
-            "Recherche…".into()
+            ts!("sidebar.search.searching")
         } else if let Some(notice) = self.search_notice_text() {
             notice.into()
         } else {
-            "Aucun résultat".into()
+            ts!("sidebar.search.no_results")
         };
         let empty = threads.is_empty() && hit_rows.is_empty();
 
@@ -422,10 +426,10 @@ impl MissiveApp {
             .overflow_y_scroll()
             .pb_2()
             .when(!threads.is_empty(), |el| {
-                el.child(header("Discussions")).children(threads)
+                el.child(header(ts!("sidebar.search.chats"))).children(threads)
             })
             .when(!hit_rows.is_empty(), |el| {
-                el.child(header("Messages")).children(hit_rows)
+                el.child(header(ts!("sidebar.search.messages"))).children(hit_rows)
             })
             .when(empty, |el| {
                 el.child(
@@ -450,7 +454,7 @@ impl MissiveApp {
         cx: &mut Context<Self>,
     ) -> AnyElement {
         let hover = p.hover;
-        let name = thread.map(display_name).unwrap_or_else(|| "Conversation".into());
+        let name = thread.map(display_name).unwrap_or_else(|| t!("sidebar.conversation").into_owned());
         let id = thread_id.to_string();
         h_flex()
             .id(("search-group", index))
@@ -491,10 +495,9 @@ impl MissiveApp {
                     .flex_none()
                     .text_size(px(11.5))
                     .text_color(p.text_faint)
-                    .child(SharedString::from(match count {
-                        1 => "1 résultat".to_string(),
-                        n => format!("{n} résultats"),
-                    })),
+                    .child(SharedString::from(
+                        tn!("sidebar.search.result_count", count).into_owned(),
+                    )),
             )
             .on_click(cx.listener(move |this, _, window, cx| {
                 this.select_thread(id.clone(), window, cx)
@@ -511,7 +514,7 @@ impl MissiveApp {
     ) -> AnyElement {
         let hover = p.hover;
         let sender = if hit.message.is_outgoing {
-            "Vous".to_string()
+            t!("sidebar.you").into_owned()
         } else {
             hit.message.sender_name.clone()
         };
@@ -605,7 +608,7 @@ impl MissiveApp {
                     })
                     .child(div().min_w_0().truncate().child(SharedString::from(label)))
                     .child(Icon::new(IconName::X).size(px(12.)))
-                    .tooltip(|window, cx| Tooltip::new("Retirer ce filtre").build(window, cx))
+                    .tooltip(|window, cx| Tooltip::new(ts!("sidebar.remove_filter")).build(window, cx))
                     .on_click(cx.listener(move |this, _, window, cx| {
                         this.remove_search_filter(field, window, cx)
                     }))
@@ -659,9 +662,9 @@ impl MissiveApp {
             .border_b_1()
             .border_color(p.divider)
             .overflow_x_scroll()
-            .child(self.filter_tab("Toutes", Filter::All, p, cx))
-            .child(self.filter_tab("Non lues", Filter::Unread, p, cx))
-            .child(self.filter_tab("Groupes", Filter::Groups, p, cx))
+            .child(self.filter_tab("tab-all", ts!("sidebar.tabs.all"), Filter::All, p, cx))
+            .child(self.filter_tab("tab-unread", ts!("sidebar.tabs.unread"), Filter::Unread, p, cx))
+            .child(self.filter_tab("tab-groups", ts!("sidebar.tabs.groups"), Filter::Groups, p, cx))
             .children(folder_tabs)
             .child(
                 div()
@@ -671,7 +674,7 @@ impl MissiveApp {
                     .cursor_pointer()
                     .text_color(p.text_muted)
                     .hover(move |style| style.text_color(text))
-                    .tooltip(|window, cx| Tooltip::new("Nouveau dossier").build(window, cx))
+                    .tooltip(|window, cx| Tooltip::new(ts!("sidebar.new_folder")).build(window, cx))
                     .child(Icon::new(IconName::Plus).size(px(16.)))
                     .on_click(cx.listener(|this, _, window, cx| {
                         this.open_new_folder(None, window, cx)
@@ -682,14 +685,15 @@ impl MissiveApp {
 
     fn filter_tab(
         &self,
-        label: &'static str,
+        id: &'static str,
+        label: SharedString,
         filter: Filter,
         p: &Palette,
         cx: &mut Context<Self>,
     ) -> AnyElement {
         let active = self.filter == filter && self.active_folder().is_none();
         let text = p.text;
-        tab_label(label, active, p)
+        tab_label(id, active, p)
             .when(!active, |el| el.hover(move |style| style.text_color(text)))
             .on_click(cx.listener(move |this, _, _, cx| this.select_filter_tab(filter, cx)))
             .child(label)
@@ -712,7 +716,7 @@ impl MissiveApp {
                         div()
                             .text_size(px(13.))
                             .font_weight(FontWeight::SEMIBOLD)
-                            .child("Historique chiffré non restauré"),
+                            .child(ts!("sidebar.history.title")),
                     ),
             )
             .child(
@@ -720,13 +724,13 @@ impl MissiveApp {
                     .text_size(px(12.))
                     .line_height(px(17.))
                     .text_color(p.text_muted)
-                    .child("Vos conversations privées n'affichent pas encore leurs messages."),
+                    .child(ts!("sidebar.history.text")),
             )
             .child(
                 Button::new("open-pin")
                     .primary()
                     .small()
-                    .label("Restaurer avec mon PIN")
+                    .label(t!("sidebar.history.restore"))
                     .on_click(cx.listener(|this, _, window, cx| this.open_pin(window, cx))),
             )
     }
@@ -752,7 +756,7 @@ impl MissiveApp {
                 .gap_1p5()
                 .text_color(p.accent_text)
                 .child(typing_dots(("typing-row", row), p.accent_text))
-                .child("écrit")
+                .child(ts!("sidebar.row.typing"))
                 .into_any_element()
         } else {
             div()
@@ -896,7 +900,7 @@ fn tab_label(id: impl Into<ElementId>, active: bool, p: &Palette) -> Stateful<Di
 fn rail_button(
     id: &'static str,
     icon: IconName,
-    label: &'static str,
+    label: SharedString,
     active: bool,
     p: &Palette,
 ) -> Stateful<Div> {
@@ -912,7 +916,7 @@ fn rail_button(
         .cursor_pointer()
         .when(active, |el| el.bg(p.accent_soft))
         .when(!active, |el| el.hover(move |style| style.bg(hover)))
-        .tooltip(move |window, cx| Tooltip::new(label).build(window, cx))
+        .tooltip(move |window, cx| Tooltip::new(label.clone()).build(window, cx))
         .child(Icon::new(icon).size(px(19.)).text_color(if active {
             p.accent_text
         } else {
@@ -922,7 +926,7 @@ fn rail_button(
 
 pub(super) fn display_name(thread: &Thread) -> String {
     if thread.name.trim().is_empty() {
-        "Conversation".into()
+        t!("sidebar.conversation").into_owned()
     } else {
         thread.name.clone()
     }

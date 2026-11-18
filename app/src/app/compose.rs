@@ -18,8 +18,13 @@ const TYPING_REFRESH: Duration = Duration::from_secs(4);
 const MAX_PENDING: usize = 10;
 const OFFLINE_EXPIRY: Duration = Duration::from_secs(30 * 60);
 const OFFLINE_TICK: Duration = Duration::from_secs(10);
-const OFFLINE_EXPIRED: &str = "Non envoyé, connexion absente";
-const OFFLINE_CANCELLED: &str = "Envoi annulé";
+fn offline_expired() -> SharedString {
+    ts!("compose.offline.expired")
+}
+
+fn offline_cancelled() -> SharedString {
+    ts!("compose.offline.cancelled")
+}
 const MAX_RECENT_EMOJIS: usize = 32;
 const EMOJI_RESULTS: usize = 160;
 const EMOJI_REOPEN_GUARD: Duration = Duration::from_millis(250);
@@ -178,19 +183,19 @@ impl EmojiTab {
         }
     }
 
-    pub(crate) fn label(self) -> &'static str {
+    pub(crate) fn label(self) -> SharedString {
         match self {
-            EmojiTab::Recent => "Récents",
+            EmojiTab::Recent => ts!("compose.emoji_tab.recent"),
             EmojiTab::Group(group) => match group {
-                emojis::Group::SmileysAndEmotion => "Smileys",
-                emojis::Group::PeopleAndBody => "Personnes",
-                emojis::Group::AnimalsAndNature => "Animaux",
-                emojis::Group::FoodAndDrink => "Nourriture",
-                emojis::Group::Activities => "Activités",
-                emojis::Group::TravelAndPlaces => "Voyages",
-                emojis::Group::Objects => "Objets",
-                emojis::Group::Symbols => "Symboles",
-                emojis::Group::Flags => "Drapeaux",
+                emojis::Group::SmileysAndEmotion => ts!("compose.emoji_tab.smileys"),
+                emojis::Group::PeopleAndBody => ts!("compose.emoji_tab.people"),
+                emojis::Group::AnimalsAndNature => ts!("compose.emoji_tab.animals"),
+                emojis::Group::FoodAndDrink => ts!("compose.emoji_tab.food"),
+                emojis::Group::Activities => ts!("compose.emoji_tab.activities"),
+                emojis::Group::TravelAndPlaces => ts!("compose.emoji_tab.travel"),
+                emojis::Group::Objects => ts!("compose.emoji_tab.objects"),
+                emojis::Group::Symbols => ts!("compose.emoji_tab.symbols"),
+                emojis::Group::Flags => ts!("compose.emoji_tab.flags"),
             },
         }
     }
@@ -455,7 +460,7 @@ impl MissiveApp {
         cx.spawn(async move |this, cx| {
             if let Err(err) = bridge.request("react", params).await {
                 let _ = this.update(cx, |this, cx| {
-                    this.set_error(err.context("Réaction impossible"));
+                    this.set_error(err.context(t!("compose.error.reaction")));
                     cx.notify();
                 });
             }
@@ -521,7 +526,7 @@ impl MissiveApp {
             files: true,
             directories: false,
             multiple: true,
-            prompt: Some("Joindre".into()),
+            prompt: Some(ts!("compose.attach.prompt")),
         });
         cx.spawn(async move |this, cx| {
             if let Ok(Ok(Some(paths))) = receiver.await {
@@ -767,10 +772,10 @@ impl MissiveApp {
     fn expire_offline(&mut self, cx: &mut Context<Self>) {
         for item in self.find.offline.take_expired(Instant::now()) {
             self.find.offline.forget(&item.client_id);
-            self.scheduled_send_finished(&item.client_id, Some(OFFLINE_EXPIRED.to_string()), cx);
+            self.scheduled_send_finished(&item.client_id, Some(offline_expired().to_string()), cx);
             if self.outgoing.contains_key(&item.client_id) {
                 self.outgoing
-                    .insert(item.client_id.clone(), Outgoing::Failed(OFFLINE_EXPIRED.into()));
+                    .insert(item.client_id.clone(), Outgoing::Failed(offline_expired()));
                 self.remeasure_message(&item.thread_id, &item.client_id, cx);
             }
             cx.notify();
@@ -931,7 +936,7 @@ impl MissiveApp {
         self.outgoing.remove(&client_id);
         self.find.offline.forget(&client_id);
         if self.find.offline.remove(&client_id) {
-            self.scheduled_send_finished(&client_id, Some(OFFLINE_CANCELLED.to_string()), cx);
+            self.scheduled_send_finished(&client_id, Some(offline_cancelled().to_string()), cx);
         }
         let is_selected = self.selected.as_deref() == Some(request.thread_id.as_str());
         if let Some(list) = self.messages.get_mut(&request.thread_id) {
@@ -1010,9 +1015,9 @@ impl MissiveApp {
                     }
                     Err(err) => {
                         let label: SharedString = if send_uncertain(&err) {
-                            "Envoi non confirmé par Meta".into()
+                            ts!("compose.error.send_unconfirmed")
                         } else {
-                            "Échec de l'envoi".into()
+                            ts!("compose.error.send_failed")
                         };
                         this.scheduled_send_finished(&client_id, Some(label.to_string()), cx);
                         if this.outgoing.contains_key(&client_id) {
@@ -1204,7 +1209,7 @@ impl MissiveApp {
         {
             return;
         }
-        let search = cx.new(|cx| InputState::new(window, cx).placeholder("Rechercher un emoji"));
+        let search = cx.new(|cx| InputState::new(window, cx).placeholder(t!("compose.emoji.search_placeholder")));
         let subscription = cx.subscribe_in(
             &search,
             window,

@@ -80,14 +80,17 @@ fn toast_xml(notification: &Notification) -> String {
             "<text>{title}</text><text>{body}</text>",
             "</binding></visual>",
             "<actions>",
-            "<input id=\"{input}\" type=\"text\" placeHolderContent=\"Répondre…\"/>",
-            "<action content=\"Envoyer\" arguments=\"reply:{id}\" hint-inputId=\"{input}\"/>",
-            "<action content=\"Marquer comme lu\" arguments=\"read:{id}\"/>",
+            "<input id=\"{input}\" type=\"text\" placeHolderContent=\"{reply_placeholder}\"/>",
+            "<action content=\"{send}\" arguments=\"reply:{id}\" hint-inputId=\"{input}\"/>",
+            "<action content=\"{mark_read}\" arguments=\"read:{id}\"/>",
             "</actions>",
             "</toast>"
         ),
         id = id,
         input = REPLY_INPUT,
+        reply_placeholder = xml_escape(&t!("notifications.toast.reply_placeholder")),
+        send = xml_escape(&t!("notifications.toast.send")),
+        mark_read = xml_escape(&t!("notifications.toast.mark_read")),
         title = xml_escape(&notification.title),
         body = xml_escape(&truncate(&notification.body, 240)),
     )
@@ -261,6 +264,7 @@ mod tests {
 
     #[::core::prelude::v1::test]
     fn toast_carries_reply_and_read_actions() {
+        let _guard = crate::i18n::scoped("fr");
         let xml = toast_xml(&Notification {
             title: "Camille & co".into(),
             body: "<salut>".into(),

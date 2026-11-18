@@ -17,6 +17,8 @@ const (
 	CodePINLocked    = "pin_locked"
 	CodeInternal     = "internal"
 	CodeCancelled    = "cancelled"
+	CodeBusy         = "busy"
+	CodeEditRejected = "edit_rejected"
 )
 
 type Request struct {

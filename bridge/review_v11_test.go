@@ -201,7 +201,7 @@ func TestReviewLSEditRejected(t *testing.T) {
 		return &table.LSTable{LSEditMessage: []*table.LSEditMessage{{MessageID: "mid.$e", Text: "before", EditCount: 0}}}
 	}
 	err := b.EditMessage(context.Background(), "55", "mid.$e", "after")
-	if body := toErrorBody(err); body.Code != CodeBadRequest || body.Message != "Messenger a refusé la modification" {
+	if body := toErrorBody(err); body.Code != CodeEditRejected {
 		t.Fatalf("a rejected edit must be reported, got %v", err)
 	}
 	if m, _ := b.store.FindMessage("mid.$e"); m.Text != "before" {

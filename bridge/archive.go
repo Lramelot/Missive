@@ -35,7 +35,6 @@ const (
 	exportDateLayout            = "2006-01-02"
 	exportFileStampLayout       = "2006-01-02 150405"
 	defaultExportBaseName       = "Conversation"
-	saveMediaFolderSuffix       = " - médias"
 	archiveTempPattern          = ".missive-*.part"
 	zoneIdentifierStream        = ":Zone.Identifier"
 	zoneIdentifierInternet      = "[ZoneTransfer]\r\nZoneId=3\r\n"
@@ -78,7 +77,7 @@ func (j *archiveJobs) start(ctx context.Context) (context.Context, func(), error
 	j.mu.Lock()
 	defer j.mu.Unlock()
 	if j.cancel != nil {
-		return nil, nil, newError(CodeBadRequest, "Un export est déjà en cours")
+		return nil, nil, newError(CodeBusy, "an archive job is already running")
 	}
 	jobCtx, cancel := context.WithCancelCause(ctx)
 	j.cancel = cancel
@@ -448,7 +447,7 @@ func writeExport(ctx context.Context, src archiveSource, rec threadRec, p Export
 			_ = os.Remove(mediaDir)
 		}
 	}
-	doc := exportDoc{Title: title, ExportedAt: exportedAt, Messages: messages, Files: files, Thread: rec}
+	doc := exportDoc{Title: title, ExportedAt: exportedAt, Messages: messages, Files: files, Thread: rec, Locale: p.Locale}
 	if err := writeExportFile(folder, p.Format, doc); err != nil {
 		return result, newError(CodeInternal, "failed to write export: %v", err)
 	}
@@ -509,7 +508,7 @@ func saveThreadMedia(ctx context.Context, src archiveSource, p SaveMediaParams) 
 		kinds = defaultSaveMediaKinds
 	}
 	store, out := src.archiveStore(), src.archiveOut()
-	dir := filepath.Join(parent, safeFileName(archiveTitle(store, rec), defaultExportBaseName)+saveMediaFolderSuffix)
+	dir := filepath.Join(parent, safeFileName(archiveTitle(store, rec), defaultExportBaseName)+exportTextFor(p.Locale).mediaSuffix)
 	if err := os.MkdirAll(dir, exportDirPermission); err != nil {
 		return SaveMediaResult{}, newError(CodeBadRequest, "dir is not writable: %v", err)
 	}

@@ -13,7 +13,7 @@ use gpui_kit::{prelude::FluentBuilder as _, *};
 use super::widgets::icon_button;
 use crate::{
     app::{History, MissiveApp},
-    settings::{Settings, Snippet, TextSize, ThemePreference},
+    settings::{Language, Settings, Snippet, TextSize, ThemePreference},
     style::Palette,
     updates::UpdateState,
 };
@@ -67,6 +67,26 @@ impl SettingsForms {
         if self.error.as_ref().is_some_and(|(f, _)| *f == form) {
             self.error = None;
         }
+    }
+}
+
+pub(crate) fn refresh_form_language(window: &mut Window, cx: &mut App) {
+    let forms = FormsView::read(cx);
+    if let Some(input) = forms.keyword {
+        input.update(cx, |input, cx| {
+            input.set_placeholder(t!("settings.keywords.placeholder"), window, cx)
+        });
+    }
+    if let Some((_, shortcut, text)) = forms.snippet {
+        shortcut.update(cx, |input, cx| {
+            input.set_placeholder(t!("settings.snippets.shortcut_placeholder"), window, cx)
+        });
+        text.update(cx, |input, cx| {
+            input.set_placeholder(t!("settings.snippets.text_placeholder"), window, cx)
+        });
+    }
+    if cx.has_global::<SettingsForms>() {
+        cx.global_mut::<SettingsForms>().error = None;
     }
 }
 
@@ -132,16 +152,16 @@ fn format_time(minutes: u16) -> String {
     format!("{:02}:{:02}", (minutes / 60) % 24, minutes % 60)
 }
 
-fn normalize_keyword(raw: &str) -> Result<String, &'static str> {
+fn normalize_keyword(raw: &str) -> Result<String, SharedString> {
     let keyword = raw.split_whitespace().collect::<Vec<_>>().join(" ");
     if keyword.is_empty() {
-        return Err("Saisissez un mot ou une expression.");
+        return Err(ts!("settings.keywords.error_empty"));
     }
     if !keyword.chars().any(char::is_alphanumeric) {
-        return Err("Le mot-clé doit contenir au moins une lettre ou un chiffre.");
+        return Err(ts!("settings.keywords.error_no_alphanumeric"));
     }
     if keyword.chars().count() > KEYWORD_MAX_CHARS {
-        return Err("60 caractères au maximum.");
+        return Err(ts!("settings.keywords.error_too_long", max = KEYWORD_MAX_CHARS));
     }
     Ok(keyword)
 }
@@ -151,30 +171,30 @@ fn validate_snippet(
     text: &str,
     existing: &[Snippet],
     index: Option<usize>,
-) -> Result<Snippet, &'static str> {
+) -> Result<Snippet, SharedString> {
     let shortcut = shortcut.trim();
     let shortcut = shortcut.strip_prefix('/').unwrap_or(shortcut);
     if shortcut.is_empty() {
-        return Err("Indiquez un raccourci.");
+        return Err(ts!("settings.snippets.error_shortcut_empty"));
     }
     if shortcut.chars().any(char::is_whitespace) {
-        return Err("Le raccourci ne doit pas contenir d'espace.");
+        return Err(ts!("settings.snippets.error_shortcut_space"));
     }
     if shortcut.contains('/') {
-        return Err("Le raccourci ne doit pas contenir de « / ».");
+        return Err(ts!("settings.snippets.error_shortcut_slash"));
     }
     if shortcut.chars().count() > SHORTCUT_MAX_CHARS {
-        return Err("24 caractères au maximum pour le raccourci.");
+        return Err(ts!("settings.snippets.error_shortcut_too_long", max = SHORTCUT_MAX_CHARS));
     }
     let taken = existing.iter().enumerate().any(|(i, snippet)| {
         Some(i) != index && snippet.shortcut.to_lowercase() == shortcut.to_lowercase()
     });
     if taken {
-        return Err("Ce raccourci existe déjà.");
+        return Err(ts!("settings.snippets.error_shortcut_taken"));
     }
     let text = text.trim();
     if text.is_empty() {
-        return Err("Saisissez le texte à insérer.");
+        return Err(ts!("settings.snippets.error_text_empty"));
     }
     Ok(Snippet {
         shortcut: shortcut.to_string(),
@@ -197,7 +217,13 @@ fn snippet_preview(text: &str) -> String {
     }
 }
 
-fn field_text(title: &'static str, description: &'static str, p: &Palette) -> Div {
+fn field_text(
+    title: impl Into<SharedString>,
+    description: impl Into<SharedString>,
+    p: &Palette,
+) -> Div {
+    let title: SharedString = title.into();
+    let description: SharedString = description.into();
     v_flex()
         .flex_1()
         .gap_0p5()
@@ -251,7 +277,7 @@ impl MissiveApp {
             Some(input) => input,
             None => {
                 let input =
-                    cx.new(|cx| InputState::new(window, cx).placeholder("Mot ou expression"));
+                    cx.new(|cx| InputState::new(window, cx).placeholder(t!("settings.keywords.placeholder")));
                 let subscription =
                     cx.subscribe_in(&input, window, |this, _, event: &InputEvent, window, cx| {
                         if let InputEvent::PressEnter { .. } = event {
@@ -290,7 +316,7 @@ impl MissiveApp {
                 .iter()
                 .any(|existing| MissiveApp::keywords_equivalent(existing, &keyword))
             {
-                Err("Ce mot-clé existe déjà.")
+                Err(ts!("settings.keywords.error_duplicate"))
             } else {
                 Ok(keyword)
             }
@@ -359,7 +385,7 @@ impl MissiveApp {
         };
         let Some(minutes) = parse_time(&input.read(cx).value()) else {
             cx.default_global::<SettingsForms>()
-                .set_error(Form::Quiet, "Heure invalide, par exemple 22:30.");
+                .set_error(Form::Quiet, t!("settings.quiet_hours.error_invalid_time"));
             cx.notify();
             return;
         };
@@ -370,7 +396,7 @@ impl MissiveApp {
         };
         if minutes == other {
             cx.default_global::<SettingsForms>()
-                .set_error(Form::Quiet, "Le début et la fin doivent être différents.");
+                .set_error(Form::Quiet, t!("settings.quiet_hours.error_same_time"));
             cx.notify();
             return;
         }
@@ -404,13 +430,13 @@ impl MissiveApp {
             .unwrap_or_default();
         let shortcut = cx.new(|cx| {
             InputState::new(window, cx)
-                .placeholder("raccourci, par exemple adresse")
+                .placeholder(t!("settings.snippets.shortcut_placeholder"))
                 .default_value(current.shortcut.clone())
         });
         let text = cx.new(|cx| {
             TextareaState::new(window, cx)
                 .auto_grow(3, 8)
-                .placeholder("Texte inséré dans le message")
+                .placeholder(t!("settings.snippets.text_placeholder"))
                 .default_value(current.text.clone())
         });
         let subscription = cx.subscribe_in(
@@ -534,7 +560,7 @@ impl MissiveApp {
                             Button::new("keyword-submit")
                                 .primary()
                                 .small()
-                                .label("Ajouter")
+                                .label(t!("settings.keywords.add_submit"))
                                 .on_click(cx.listener(|this, _, window, cx| {
                                     this.submit_keyword(window, cx)
                                 })),
@@ -543,7 +569,7 @@ impl MissiveApp {
                             Button::new("keyword-close")
                                 .ghost()
                                 .small()
-                                .label("Fermer")
+                                .label(t!("settings.keywords.close"))
                                 .on_click(
                                     cx.listener(|this, _, _, cx| this.close_keyword_field(cx)),
                                 ),
@@ -555,7 +581,7 @@ impl MissiveApp {
                 .ghost()
                 .small()
                 .icon(IconName::Plus)
-                .label("Ajouter un mot-clé")
+                .label(t!("settings.keywords.add"))
                 .on_click(cx.listener(|this, _, window, cx| this.open_keyword_field(window, cx)))
                 .into_any_element(),
         };
@@ -563,8 +589,8 @@ impl MissiveApp {
             .py_2()
             .gap_2()
             .child(field_text(
-                "Mots-clés qui passent outre",
-                "Un message contenant l'un de ces mots vous notifie même en sourdine ou pendant les heures calmes. Majuscules et accents sont ignorés.",
+                t!("settings.keywords.title"),
+                t!("settings.keywords.description"),
                 p,
             ))
             .when(!chips.is_empty(), |el| {
@@ -593,14 +619,14 @@ impl MissiveApp {
                     Button::new("quiet-submit")
                         .primary()
                         .small()
-                        .label("OK")
+                        .label(t!("settings.quiet_hours.ok"))
                         .on_click(cx.listener(|this, _, window, cx| this.submit_quiet(window, cx))),
                 )
                 .child(
                     Button::new("quiet-cancel")
                         .ghost()
                         .small()
-                        .label("Annuler")
+                        .label(t!("settings.quiet_hours.cancel"))
                         .on_click(cx.listener(|this, _, _, cx| this.close_quiet_field(cx))),
                 )
                 .into_any_element();
@@ -640,8 +666,8 @@ impl MissiveApp {
         v_flex()
             .child(self.setting_row(
                 "quiet-hours",
-                "Heures calmes",
-                "Aucune notification sur cette plage, sauf conversations prioritaires, mentions et mots-clés.",
+                t!("settings.quiet_hours.title"),
+                t!("settings.quiet_hours.description"),
                 enabled,
                 |s, v| s.quiet_hours.enabled = v,
                 p,
@@ -657,11 +683,15 @@ impl MissiveApp {
                                 .gap_2()
                                 .text_size(px(13.))
                                 .text_color(p.text_muted)
-                                .child("De")
+                                .child(ts!("settings.quiet_hours.from"))
                                 .child(start)
-                                .child("à")
+                                .child(ts!("settings.quiet_hours.to"))
                                 .child(end)
-                                .child(div().text_color(p.text_faint).child("heure locale")),
+                                .child(
+                                    div()
+                                        .text_color(p.text_faint)
+                                        .child(ts!("settings.quiet_hours.local_time")),
+                                ),
                         )
                         .children(error_line(forms.error_for(Form::Quiet), p)),
                 )
@@ -682,7 +712,7 @@ impl MissiveApp {
                         .find(|thread| thread.id == *thread_id)
                         .map(|thread| thread.name.clone())
                         .filter(|name| !name.trim().is_empty())
-                        .unwrap_or_else(|| "Conversation indisponible".to_string());
+                        .unwrap_or_else(|| t!("settings.priority.unavailable").into_owned());
                     let id = thread_id.clone();
                     h_flex()
                         .gap_3()
@@ -707,8 +737,8 @@ impl MissiveApp {
             .py_2()
             .gap_1()
             .child(field_text(
-                "Conversations prioritaires",
-                "Elles vous notifient même pendant les heures calmes. Ajoutez-en depuis le menu d'une conversation.",
+                t!("settings.priority.title"),
+                t!("settings.priority.description"),
                 p,
             ))
             .when(rows.is_empty(), |el| {
@@ -717,7 +747,7 @@ impl MissiveApp {
                         .pt_1()
                         .text_size(px(12.5))
                         .text_color(p.text_faint)
-                        .child("Aucune conversation prioritaire."),
+                        .child(ts!("settings.priority.empty")),
                 )
             })
             .children(rows)
@@ -793,16 +823,16 @@ impl MissiveApp {
                         .text_size(px(14.))
                         .font_weight(FontWeight::SEMIBOLD)
                         .child(if index.is_some() {
-                            "Modifier la réponse rapide"
+                            ts!("settings.snippets.edit_title")
                         } else {
-                            "Nouvelle réponse rapide"
+                            ts!("settings.snippets.new_title")
                         }),
                 )
                 .child(
                     div()
                         .text_size(px(12.5))
                         .text_color(p.text_muted)
-                        .child("Raccourci, sans espace"),
+                        .child(ts!("settings.snippets.shortcut_label")),
                 )
                 .child(
                     h_flex()
@@ -820,7 +850,7 @@ impl MissiveApp {
                     div()
                         .text_size(px(12.5))
                         .text_color(p.text_muted)
-                        .child("Texte, sur plusieurs lignes si besoin"),
+                        .child(ts!("settings.snippets.text_label")),
                 )
                 .child(Textarea::new(text))
                 .children(error_line(forms.error_for(Form::Snippet), p))
@@ -833,7 +863,7 @@ impl MissiveApp {
                             Button::new("snippet-cancel")
                                 .ghost()
                                 .small()
-                                .label("Annuler")
+                                .label(t!("settings.snippets.cancel"))
                                 .on_click(
                                     cx.listener(|this, _, _, cx| this.close_snippet_editor(cx)),
                                 ),
@@ -842,7 +872,7 @@ impl MissiveApp {
                             Button::new("snippet-save")
                                 .primary()
                                 .small()
-                                .label("Enregistrer")
+                                .label(t!("settings.snippets.save"))
                                 .on_click(cx.listener(|this, _, window, cx| {
                                     this.submit_snippet(window, cx)
                                 })),
@@ -856,7 +886,7 @@ impl MissiveApp {
                         .ghost()
                         .small()
                         .icon(IconName::Plus)
-                        .label("Ajouter une réponse rapide")
+                        .label(t!("settings.snippets.add"))
                         .on_click(cx.listener(|this, _, window, cx| {
                             this.open_snippet_editor(None, window, cx)
                         })),
@@ -870,14 +900,14 @@ impl MissiveApp {
                     .pb_1()
                     .text_size(px(12.5))
                     .text_color(p.text_muted)
-                    .child("Tapez « / » suivi du raccourci dans un message pour insérer le texte."),
+                    .child(ts!("settings.snippets.hint")),
             )
             .when(rows.is_empty() && forms.snippet.is_none(), |el| {
                 el.child(
                     div()
                         .text_size(px(12.5))
                         .text_color(p.text_faint)
-                        .child("Aucune réponse rapide pour le moment."),
+                        .child(ts!("settings.snippets.empty")),
                 )
             })
             .children(rows)
@@ -889,8 +919,8 @@ impl MissiveApp {
         v_flex()
             .child(self.setting_row(
                 "read-receipts",
-                "Envoyer les confirmations de lecture",
-                "Désactivé, vous lisez en toute discrétion : l'expéditeur ne voit pas que vous avez lu. Répondre ou choisir « Marquer comme lu » le lui indique.",
+                t!("settings.privacy.read_receipts_title"),
+                t!("settings.privacy.read_receipts_description"),
                 self.settings.send_read_receipts,
                 |s, v| s.send_read_receipts = v,
                 p,
@@ -898,8 +928,8 @@ impl MissiveApp {
             ))
             .child(self.setting_row(
                 "send-typing",
-                "Indiquer quand j'écris",
-                "Vos contacts voient que vous êtes en train d'écrire.",
+                t!("settings.privacy.typing_title"),
+                t!("settings.privacy.typing_description"),
                 self.settings.send_typing,
                 |s, v| s.send_typing = v,
                 p,
@@ -910,10 +940,10 @@ impl MissiveApp {
 
     fn render_appearance(&self, p: &Palette, cx: &mut Context<Self>) -> AnyElement {
         let sizes: Vec<AnyElement> = [
-            ("text-small", "Petit", TextSize::Small),
-            ("text-normal", "Normal", TextSize::Normal),
-            ("text-large", "Grand", TextSize::Large),
-            ("text-larger", "Très grand", TextSize::Larger),
+            ("text-small", ts!("settings.appearance.size_small"), TextSize::Small),
+            ("text-normal", ts!("settings.appearance.size_normal"), TextSize::Normal),
+            ("text-large", ts!("settings.appearance.size_large"), TextSize::Large),
+            ("text-larger", ts!("settings.appearance.size_larger"), TextSize::Larger),
         ]
         .into_iter()
         .map(|(id, label, value)| {
@@ -954,8 +984,8 @@ impl MissiveApp {
                     .pb_2()
                     .gap_2()
                     .child(field_text(
-                        "Taille du texte",
-                        "Messages, noms et zone de saisie.",
+                        t!("settings.appearance.text_size_title"),
+                        t!("settings.appearance.text_size_description"),
                         p,
                     ))
                     .child(
@@ -972,8 +1002,8 @@ impl MissiveApp {
                     .py_2()
                     .gap_4()
                     .child(field_text(
-                        "Affichage compact",
-                        "Resserre l'espacement entre les messages.",
+                        t!("settings.appearance.compact_title"),
+                        t!("settings.appearance.compact_description"),
                         p,
                     ))
                     .child(
@@ -993,8 +1023,8 @@ impl MissiveApp {
             .py_2()
             .gap_3()
             .child(field_text(
-                "Journal de diagnostic",
-                "Version, système et journal récent de l'application, sans le contenu de vos messages. Utile pour signaler un problème.",
+                t!("settings.diagnostic.title"),
+                t!("settings.diagnostic.description"),
                 p,
             ))
             .child(
@@ -1006,7 +1036,7 @@ impl MissiveApp {
                             .outline()
                             .small()
                             .icon(IconName::Copy)
-                            .label("Copier le diagnostic")
+                            .label(t!("settings.diagnostic.copy"))
                             .on_click(cx.listener(|this, _, _, cx| this.copy_diagnostic(cx))),
                     )
                     .child(
@@ -1014,7 +1044,7 @@ impl MissiveApp {
                             .ghost()
                             .small()
                             .icon(IconName::FolderOpen)
-                            .label("Ouvrir le dossier des journaux")
+                            .label(t!("settings.diagnostic.open_logs"))
                             .on_click(cx.listener(|this, _, _, cx| this.open_logs_folder(cx))),
                     ),
             )
@@ -1024,7 +1054,7 @@ impl MissiveApp {
 
 impl MissiveApp {
     pub(super) fn render_settings(&self, p: &Palette, cx: &mut Context<Self>) -> impl IntoElement {
-        let section = |title: &'static str| {
+        let section = |title: SharedString| {
             div()
                 .pt_5()
                 .pb_2()
@@ -1034,9 +1064,9 @@ impl MissiveApp {
                 .child(title)
         };
         let themes: Vec<AnyElement> = [
-            ("theme-system", "Système", ThemePreference::System),
-            ("theme-light", "Clair", ThemePreference::Light),
-            ("theme-dark", "Sombre", ThemePreference::Dark),
+            ("theme-system", ts!("settings.appearance.theme_system"), ThemePreference::System),
+            ("theme-light", ts!("settings.appearance.theme_light"), ThemePreference::Light),
+            ("theme-dark", ts!("settings.appearance.theme_dark"), ThemePreference::Dark),
         ]
         .into_iter()
         .map(|(id, label, value)| {
@@ -1064,6 +1094,42 @@ impl MissiveApp {
                 })
                 .child(label)
                 .on_click(cx.listener(move |this, _, window, cx| this.set_theme(value, window, cx)))
+                .into_any_element()
+        })
+        .collect();
+        let languages: Vec<AnyElement> = [
+            ("language-auto", ts!("settings.language.auto"), Language::Auto),
+            ("language-french", SharedString::from("Français"), Language::French),
+            ("language-english", SharedString::from("English"), Language::English),
+        ]
+        .into_iter()
+        .map(|(id, label, value)| {
+            let active = self.settings.language == value;
+            let hover = p.hover;
+            div()
+                .id(id)
+                .flex_1()
+                .h(px(36.))
+                .flex()
+                .items_center()
+                .justify_center()
+                .rounded(px(10.))
+                .text_size(px(13.))
+                .cursor_pointer()
+                .when(active, |el| {
+                    el.bg(p.raised)
+                        .border_1()
+                        .border_color(p.divider)
+                        .font_weight(FontWeight::SEMIBOLD)
+                        .text_color(p.text)
+                })
+                .when(!active, |el| {
+                    el.text_color(p.text_muted).hover(move |s| s.bg(hover))
+                })
+                .child(label)
+                .on_click(
+                    cx.listener(move |this, _, window, cx| this.set_language(value, window, cx)),
+                )
                 .into_any_element()
         })
         .collect();
@@ -1112,7 +1178,7 @@ impl MissiveApp {
                                 div()
                                     .text_size(px(21.))
                                     .font_weight(FontWeight::EXTRA_BOLD)
-                                    .child("Paramètres"),
+                                    .child(ts!("settings.title")),
                             )
                             .child(
                                 icon_button("close-settings", IconName::X, false, p).on_click(
@@ -1127,11 +1193,11 @@ impl MissiveApp {
                             .min_h_0()
                             .px_7()
                             .pb_7()
-                    .child(section("NOTIFICATIONS"))
+                    .child(section(ts!("settings.section.notifications")))
                     .child(self.setting_row(
                         "notifications",
-                        "Notifications de bureau",
-                        "Une notification pour chaque nouveau message.",
+                        t!("settings.notifications.title"),
+                        t!("settings.notifications.description"),
                         self.settings.notifications,
                         |s, v| s.notifications = v,
                         p,
@@ -1139,8 +1205,8 @@ impl MissiveApp {
                     ))
                     .child(self.setting_row(
                         "preview",
-                        "Afficher le contenu",
-                        "Sinon, la notification indique seulement « Nouveau message ».",
+                        t!("settings.notifications.preview_title"),
+                        t!("settings.notifications.preview_description"),
                         self.settings.notification_preview,
                         |s, v| s.notification_preview = v,
                         p,
@@ -1149,15 +1215,15 @@ impl MissiveApp {
                     .child(keywords)
                     .child(quiet_hours)
                     .child(priority)
-                    .child(section("CONFIDENTIALITÉ"))
+                    .child(section(ts!("settings.section.privacy")))
                     .child(privacy)
-                    .child(section("RÉPONSES RAPIDES"))
+                    .child(section(ts!("settings.section.snippets")))
                     .child(snippets)
-                    .child(section("FENÊTRE"))
+                    .child(section(ts!("settings.section.window")))
                     .child(self.setting_row(
                         "tray",
-                        "Garder Missive dans la zone de notification",
-                        "Fermer la fenêtre la masque au lieu de quitter.",
+                        t!("settings.window.tray_title"),
+                        t!("settings.window.tray_description"),
                         self.settings.close_to_tray,
                         |s, v| s.close_to_tray = v,
                         p,
@@ -1165,14 +1231,14 @@ impl MissiveApp {
                     ))
                     .child(self.setting_row(
                         "autostart",
-                        "Lancer au démarrage",
-                        "Missive démarre en arrière-plan à l'ouverture de session.",
+                        t!("settings.window.autostart_title"),
+                        t!("settings.window.autostart_description"),
                         self.settings.launch_at_login,
                         |s, v| s.launch_at_login = v,
                         p,
                         cx,
                     ))
-                    .child(section("APPARENCE"))
+                    .child(section(ts!("settings.section.appearance")))
                     .child(
                         h_flex()
                             .p_1()
@@ -1181,8 +1247,27 @@ impl MissiveApp {
                             .bg(p.field_bg)
                             .children(themes),
                     )
+                    .child(
+                        v_flex()
+                            .pt_3()
+                            .pb_2()
+                            .gap_2()
+                            .child(field_text(
+                                t!("settings.language.title"),
+                                t!("settings.language.description"),
+                                p,
+                            ))
+                            .child(
+                                h_flex()
+                                    .p_1()
+                                    .gap_1()
+                                    .rounded(px(12.))
+                                    .bg(p.field_bg)
+                                    .children(languages),
+                            ),
+                    )
                     .child(appearance)
-                    .child(section("DISCUSSIONS"))
+                    .child(section(ts!("settings.section.threads")))
                     .child(
                         h_flex()
                             .py_2()
@@ -1195,17 +1280,20 @@ impl MissiveApp {
                                         div()
                                             .text_size(px(14.))
                                             .font_weight(FontWeight::SEMIBOLD)
-                                            .child("Archivées dans Missive"),
+                                            .child(ts!("settings.threads.archived_title")),
                                     )
                                     .child(
                                         div()
                                             .text_size(px(12.5))
                                             .text_color(p.text_muted)
-                                            .child(SharedString::from(match local_archived {
-                                                0 => "Aucune discussion archivée localement.".to_string(),
-                                                1 => "1 discussion masquée de « Toutes » jusqu'au prochain message.".to_string(),
-                                                n => format!("{n} discussions masquées de « Toutes » jusqu'au prochain message."),
-                                            })),
+                                            .child(if local_archived == 0 {
+                                                ts!("settings.threads.archived_none")
+                                            } else {
+                                                SharedString::from(tn!(
+                                                    "settings.threads.archived_hidden",
+                                                    local_archived
+                                                ))
+                                            }),
                                     ),
                             )
                             .when(local_archived > 0, |el| {
@@ -1213,18 +1301,18 @@ impl MissiveApp {
                                     Button::new("unarchive-all")
                                         .outline()
                                         .small()
-                                        .label("Tout désarchiver")
+                                        .label(t!("settings.threads.unarchive_all"))
                                         .on_click(cx.listener(|this, _, _, cx| {
                                             this.unarchive_all_local(cx)
                                         })),
                                 )
                             }),
                     )
-                    .child(section("MISES À JOUR"))
+                    .child(section(ts!("settings.section.updates")))
                     .child(self.setting_row(
                         "updates",
-                        "Vérifier automatiquement",
-                        "Interroge les versions publiées au démarrage.",
+                        t!("settings.updates.auto_title"),
+                        t!("settings.updates.auto_description"),
                         self.settings.check_updates,
                         |s, v| s.check_updates = v,
                         p,
@@ -1236,28 +1324,26 @@ impl MissiveApp {
                             .gap_3()
                             .text_size(px(12.5))
                             .text_color(p.text_muted)
-                            .child(SharedString::from(format!("Version {version}")))
+                            .child(ts!("settings.updates.version", version = version))
                             .when(!managed, |el| {
                                 el.child(
-                                    div().text_color(p.text_faint).child(
-                                        "· hors installation, pas de mise à jour automatique",
-                                    ),
+                                    div()
+                                        .text_color(p.text_faint)
+                                        .child(ts!("settings.updates.not_installed")),
                                 )
                             })
                             .when_some(self.update.clone(), |el, update| match update {
                                 UpdateState::Downloading { version } => el.child(
-                                    div().text_color(p.text_muted).child(SharedString::from(
-                                        format!("Téléchargement de la version {version}…"),
-                                    )),
+                                    div()
+                                        .text_color(p.text_muted)
+                                        .child(ts!("settings.updates.downloading", version = version)),
                                 ),
                                 UpdateState::Ready { version, .. } => {
                                     el.child(
                                         Button::new("restart-update")
                                             .primary()
                                             .small()
-                                            .label(SharedString::from(format!(
-                                                "Redémarrer pour passer en {version}"
-                                            )))
+                                            .label(ts!("settings.updates.restart", version = version))
                                             .on_click(cx.listener(|this, _, _, cx| {
                                                 this.restart_to_update(cx)
                                             })),
@@ -1271,16 +1357,16 @@ impl MissiveApp {
                                         .text_color(p.accent_text)
                                         .font_weight(FontWeight::SEMIBOLD)
                                         .cursor_pointer()
-                                        .child("Rechercher maintenant")
+                                        .child(ts!("settings.updates.check_now"))
                                         .on_click(
                                             cx.listener(|this, _, _, cx| this.check_for_update(cx)),
                                         ),
                                 )
                             }),
                     )
-                    .child(section("DIAGNOSTIC"))
+                    .child(section(ts!("settings.section.diagnostic")))
                     .child(diagnostic)
-                    .child(section("COMPTE"))
+                    .child(section(ts!("settings.section.account")))
                     .child(
                         h_flex()
                             .gap_2()
@@ -1288,7 +1374,7 @@ impl MissiveApp {
                                 el.child(
                                     Button::new("settings-restore")
                                         .outline()
-                                        .label("Restaurer l'historique chiffré")
+                                        .label(t!("settings.account.restore_history"))
                                         .on_click(cx.listener(|this, _, window, cx| {
                                             this.settings_open = false;
                                             this.open_pin(window, cx);
@@ -1298,7 +1384,7 @@ impl MissiveApp {
                             .child(
                                 Button::new("logout")
                                     .danger()
-                                    .label("Se déconnecter")
+                                    .label(t!("settings.account.logout"))
                                     .on_click(
                                         cx.listener(|this, _, window, cx| this.logout(window, cx)),
                                     ),
@@ -1313,13 +1399,15 @@ impl MissiveApp {
     fn setting_row(
         &self,
         id: &'static str,
-        title: &'static str,
-        description: &'static str,
+        title: impl Into<SharedString>,
+        description: impl Into<SharedString>,
         checked: bool,
         toggle: Toggle,
         p: &Palette,
         cx: &mut Context<Self>,
     ) -> AnyElement {
+        let title: SharedString = title.into();
+        let description: SharedString = description.into();
         let view = cx.entity();
         h_flex()
             .py_2()

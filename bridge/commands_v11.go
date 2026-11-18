@@ -225,7 +225,7 @@ func (b *MetaBackend) EditMessage(ctx context.Context, threadID, messageID, text
 		var resp *table.LSTable
 		resp, err = b.runTasks(ctx, &socket.EditMessageTask{MessageID: messageID, Text: text})
 		if err == nil && !b.lsEditAccepted(ctx, resp, messageID, text) {
-			return newError(CodeBadRequest, "Messenger a refusé la modification")
+			return newError(CodeEditRejected, "Messenger rejected the edit")
 		}
 	} else {
 		err = b.sendWAConsumer(ctx, rec, waEditPayload(rec, msg, b.store.SelfID(), text, time.Now().UnixMilli()), "")

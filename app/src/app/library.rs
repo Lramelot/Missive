@@ -207,6 +207,10 @@ fn is_me_alias(value: &str) -> bool {
     matches!(fold(value.trim()).as_str(), "moi" | "me" | "vous" | "je")
 }
 
+fn me_keyword() -> &'static str {
+    if crate::i18n::is_french() { "moi" } else { "me" }
+}
+
 impl MissiveApp {
     pub(crate) fn search_active(&self) -> bool {
         self.thread_ops.search.query.is_active()
@@ -310,7 +314,7 @@ impl MissiveApp {
             let found = if is_me_alias(wanted) {
                 self.user
                     .as_ref()
-                    .map(|user| (user.id.clone(), "Moi".to_string()))
+                    .map(|user| (user.id.clone(), t!("library.search.me").to_string()))
             } else {
                 self.ranked_people(wanted).into_iter().next().map(|person| {
                     sender_outside = scoped && !person.in_scope;
@@ -430,6 +434,16 @@ impl MissiveApp {
         self.set_search_query(query, window, cx);
     }
 
+    pub(crate) fn set_search_from_me(
+        &mut self,
+        active: bool,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let value = active.then(|| me_keyword().to_string());
+        self.set_search_from(value, window, cx);
+    }
+
     pub(crate) fn set_search_within(
         &mut self,
         value: Option<String>,
@@ -451,9 +465,12 @@ impl MissiveApp {
             cx.notify();
             return;
         }
-        let person = cx.new(|cx| InputState::new(window, cx).placeholder("Nom d'une personne"));
-        let conversation =
-            cx.new(|cx| InputState::new(window, cx).placeholder("Nom de la conversation"));
+        let person = cx.new(|cx| {
+            InputState::new(window, cx).placeholder(t!("library.search.person_placeholder"))
+        });
+        let conversation = cx.new(|cx| {
+            InputState::new(window, cx).placeholder(t!("library.search.conversation_placeholder"))
+        });
         let subscriptions = vec![
             cx.subscribe_in(&person, window, |this, _, event: &InputEvent, window, cx| {
                 match event {
@@ -509,7 +526,7 @@ impl MissiveApp {
         }
         let input = panel.person.clone();
         let value = if is_me_alias(&typed) {
-            "moi".to_string()
+            me_keyword().to_string()
         } else {
             self.search_people(&typed)
                 .into_iter()
@@ -561,18 +578,20 @@ impl MissiveApp {
         if let Some(raw) = &query.from {
             let label = match &search.sender {
                 Some((_, name)) if search.sender_outside => {
-                    format!("De : {name} · pas dans cette conversation")
+                    t!("library.chip.from_outside", name = name).to_string()
                 }
-                Some((_, name)) => format!("De : {name}"),
-                None => format!("De : {raw} · introuvable"),
+                Some((_, name)) => t!("library.chip.from", name = name).to_string(),
+                None => t!("library.chip.from_missing", name = raw).to_string(),
             };
             push(SearchField::From, label, problem(SearchField::From));
         }
         if let Some(raw) = &query.within {
             let label = match &search.thread {
-                Some((_, name)) if !name.trim().is_empty() => format!("Dans : {name}"),
-                Some(_) => "Dans : Conversation".to_string(),
-                None => format!("Dans : {raw} · introuvable"),
+                Some((_, name)) if !name.trim().is_empty() => {
+                    t!("library.chip.within", name = name).to_string()
+                }
+                Some(_) => t!("library.chip.within_unnamed").to_string(),
+                None => t!("library.chip.within_missing", name = raw).to_string(),
             };
             push(SearchField::Within, label, problem(SearchField::Within));
         }
@@ -580,15 +599,16 @@ impl MissiveApp {
             push(SearchField::Kind(*kind), kind.label().to_string(), false);
         }
         if !query.invalid_kinds.is_empty() {
-            let label = format!("Type inconnu : {}", query.invalid_kinds.join(", "));
+            let label = t!("library.chip.unknown_kinds", kinds = query.invalid_kinds.join(", "))
+                .to_string();
             push(SearchField::InvalidKinds, label, true);
         }
         if let Some(bound) = &query.after {
-            let label = format!("Après : {}", bound.raw);
+            let label = t!("library.chip.after", date = bound.raw).to_string();
             push(SearchField::After, label, !bound.is_valid());
         }
         if let Some(bound) = &query.before {
-            let label = format!("Avant : {}", bound.raw);
+            let label = t!("library.chip.before", date = bound.raw).to_string();
             push(SearchField::Before, label, !bound.is_valid());
         }
         if search.sender_outside {
@@ -606,30 +626,25 @@ impl MissiveApp {
         }
         let (_, person) = search.sender.as_ref()?;
         let (_, thread) = search.thread.as_ref()?;
-        Some(format!(
-            "{person} ne fait pas partie de « {thread} » : aucun message de cette personne ici."
-        ))
+        Some(t!("library.notice.sender_outside", person = person, thread = thread).to_string())
     }
 
     pub(crate) fn search_problem_text(&self) -> Option<String> {
         let search = &self.thread_ops.search;
         let query = &search.query;
         Some(match search.problems.first()? {
-            SearchField::From => format!(
-                "Aucune personne ne correspond à « {} ».",
-                query.from.clone().unwrap_or_default()
-            ),
-            SearchField::Within => format!(
-                "Aucune conversation ne correspond à « {} ».",
-                query.within.clone().unwrap_or_default()
-            ),
-            SearchField::InvalidKinds => {
-                "Types reconnus après a: photo, vidéo, lien, fichier, vocal, position.".into()
-            }
-            SearchField::Before | SearchField::After => {
-                "Date non reconnue. Exemples : 12/03/2024, 2024-03-12, hier, mars 2024, 2023."
-                    .into()
-            }
+            SearchField::From => t!(
+                "library.problem.from",
+                name = query.from.clone().unwrap_or_default()
+            )
+            .to_string(),
+            SearchField::Within => t!(
+                "library.problem.within",
+                name = query.within.clone().unwrap_or_default()
+            )
+            .to_string(),
+            SearchField::InvalidKinds => t!("library.problem.kinds").to_string(),
+            SearchField::Before | SearchField::After => t!("library.problem.date").to_string(),
             SearchField::Kind(_) => return None,
         })
     }
@@ -642,7 +657,7 @@ impl MissiveApp {
             .collect()
     }
 
-    pub(crate) fn search_period_options(&self) -> Vec<(&'static str, String, bool)> {
+    pub(crate) fn search_period_options(&self) -> Vec<(SharedString, String, bool)> {
         let today = today();
         let ago = |days: i64| {
             (today - chrono::Duration::days(days))
@@ -656,11 +671,12 @@ impl MissiveApp {
             .after
             .as_ref()
             .and_then(DateBound::after_date);
+        let yesterday = if crate::i18n::is_french() { "hier" } else { "yesterday" };
         [
-            ("Aujourd'hui", "hier".to_string()),
-            ("7 derniers jours", ago(7)),
-            ("30 derniers jours", ago(30)),
-            ("Cette année", (today.year() - 1).to_string()),
+            (ts!("library.period.today"), yesterday.to_string()),
+            (ts!("library.period.last_7_days"), ago(7)),
+            (ts!("library.period.last_30_days"), ago(30)),
+            (ts!("library.period.this_year"), (today.year() - 1).to_string()),
         ]
         .into_iter()
         .map(|(label, raw)| {
@@ -736,7 +752,7 @@ impl MissiveApp {
         let mut older = match result {
             Ok(older) => older,
             Err(err) => {
-                self.set_error(err.context("Historique indisponible"));
+                self.set_error(err.context(t!("library.history_unavailable")));
                 cx.notify();
                 return None;
             }
@@ -822,7 +838,8 @@ impl MissiveApp {
             self.close_switcher(cx);
             return;
         }
-        let input = cx.new(|cx| InputState::new(window, cx).placeholder("Aller à une discussion…"));
+        let input = cx
+            .new(|cx| InputState::new(window, cx).placeholder(t!("library.switcher_placeholder")));
         let subscription = cx.subscribe_in(
             &input,
             window,
@@ -1219,7 +1236,7 @@ impl MissiveApp {
                         this.media.insert(key, Media::Ready(path.clone()));
                         then(this, path, cx);
                     }
-                    Err(_) => this.show_toast("Image indisponible pour le moment", cx),
+                    Err(_) => this.show_toast(t!("library.lightbox.image_unavailable"), cx),
                 }
                 cx.notify();
             });
@@ -1235,9 +1252,9 @@ impl MissiveApp {
             match image {
                 Some(image) => {
                     cx.write_to_clipboard(ClipboardItem::new_image(&image));
-                    this.show_toast("Image copiée", cx);
+                    this.show_toast(t!("library.lightbox.copied"), cx);
                 }
-                None => this.show_toast("Impossible de copier cette image", cx),
+                None => this.show_toast(t!("library.lightbox.copy_failed"), cx),
             }
         });
     }
@@ -1280,8 +1297,8 @@ impl MissiveApp {
                 };
                 let copied = std::fs::copy(&source, &target);
                 let _ = this.update(cx, |this, cx| match copied {
-                    Ok(_) => this.show_toast("Image enregistrée", cx),
-                    Err(_) => this.show_toast("Impossible d'enregistrer l'image", cx),
+                    Ok(_) => this.show_toast(t!("library.lightbox.saved"), cx),
+                    Err(_) => this.show_toast(t!("library.lightbox.save_failed"), cx),
                 });
             })
             .detach();
@@ -1341,7 +1358,7 @@ impl MissiveApp {
                     Err(err) => {
                         eprintln!("[app] video download failed: {err:#}");
                         this.media.remove(&key);
-                        this.show_toast("Impossible d'ouvrir cette vidéo", cx);
+                        this.show_toast(t!("library.video_open_failed"), cx);
                     }
                 }
                 cx.notify();
@@ -1414,8 +1431,10 @@ impl SearchKind {
             "fichier" | "fichiers" | "file" | "files" | "document" | "documents" => {
                 Some(SearchKind::File)
             }
-            "vocal" | "vocaux" | "audio" | "audios" => Some(SearchKind::Audio),
-            "position" | "positions" | "lieu" | "lieux" | "location" => {
+            "vocal" | "vocaux" | "audio" | "audios" | "voice" | "voices" => {
+                Some(SearchKind::Audio)
+            }
+            "position" | "positions" | "lieu" | "lieux" | "location" | "locations" => {
                 Some(SearchKind::Location)
             }
             _ => None,
@@ -1434,24 +1453,35 @@ impl SearchKind {
     }
 
     fn token(self) -> &'static str {
-        match self {
-            SearchKind::Photo => "photo",
-            SearchKind::Video => "vidéo",
-            SearchKind::Link => "lien",
-            SearchKind::File => "fichier",
-            SearchKind::Audio => "vocal",
-            SearchKind::Location => "position",
+        if crate::i18n::is_french() {
+            match self {
+                SearchKind::Photo => "photo",
+                SearchKind::Video => "vidéo",
+                SearchKind::Link => "lien",
+                SearchKind::File => "fichier",
+                SearchKind::Audio => "vocal",
+                SearchKind::Location => "position",
+            }
+        } else {
+            match self {
+                SearchKind::Photo => "photo",
+                SearchKind::Video => "video",
+                SearchKind::Link => "link",
+                SearchKind::File => "file",
+                SearchKind::Audio => "voice",
+                SearchKind::Location => "location",
+            }
         }
     }
 
-    pub(crate) fn label(self) -> &'static str {
+    pub(crate) fn label(self) -> SharedString {
         match self {
-            SearchKind::Photo => "Photos",
-            SearchKind::Video => "Vidéos",
-            SearchKind::Link => "Liens",
-            SearchKind::File => "Fichiers",
-            SearchKind::Audio => "Messages vocaux",
-            SearchKind::Location => "Positions",
+            SearchKind::Photo => ts!("library.kind.photo"),
+            SearchKind::Video => ts!("library.kind.video"),
+            SearchKind::Link => ts!("library.kind.link"),
+            SearchKind::File => ts!("library.kind.file"),
+            SearchKind::Audio => ts!("library.kind.audio"),
+            SearchKind::Location => ts!("library.kind.location"),
         }
     }
 }
@@ -1540,27 +1570,32 @@ impl SearchQuery {
     }
 
     pub(crate) fn to_input(&self) -> String {
+        let (from_key, within_key, kind_key, after_key, before_key) = if crate::i18n::is_french() {
+            ("de", "dans", "a", "après", "avant")
+        } else {
+            ("from", "in", "has", "after", "before")
+        };
         let mut parts: Vec<String> = Vec::new();
         if !self.text.is_empty() {
             parts.push(self.text.clone());
         }
         if let Some(from) = &self.from {
-            parts.push(format!("de:{}", quote(from)));
+            parts.push(format!("{from_key}:{}", quote(from)));
         }
         if let Some(within) = &self.within {
-            parts.push(format!("dans:{}", quote(within)));
+            parts.push(format!("{within_key}:{}", quote(within)));
         }
         for kind in &self.kinds {
-            parts.push(format!("a:{}", kind.token()));
+            parts.push(format!("{kind_key}:{}", kind.token()));
         }
         for kind in &self.invalid_kinds {
-            parts.push(format!("a:{}", quote(kind)));
+            parts.push(format!("{kind_key}:{}", quote(kind)));
         }
         if let Some(after) = &self.after {
-            parts.push(format!("après:{}", quote(&after.raw)));
+            parts.push(format!("{after_key}:{}", quote(&after.raw)));
         }
         if let Some(before) = &self.before {
-            parts.push(format!("avant:{}", quote(&before.raw)));
+            parts.push(format!("{before_key}:{}", quote(&before.raw)));
         }
         parts.join(" ")
     }
@@ -1596,7 +1631,7 @@ fn tokenize(input: &str) -> Vec<String> {
     tokens
 }
 
-const MONTH_NAMES: [(&str, u32); 21] = [
+const MONTH_NAMES: [(&str, u32); 41] = [
     ("janvier", 1),
     ("janv", 1),
     ("fevrier", 2),
@@ -1618,6 +1653,26 @@ const MONTH_NAMES: [(&str, u32); 21] = [
     ("nov", 11),
     ("decembre", 12),
     ("dec", 12),
+    ("january", 1),
+    ("jan", 1),
+    ("february", 2),
+    ("feb", 2),
+    ("march", 3),
+    ("mar", 3),
+    ("april", 4),
+    ("apr", 4),
+    ("may", 5),
+    ("june", 6),
+    ("jun", 6),
+    ("july", 7),
+    ("jul", 7),
+    ("august", 8),
+    ("aug", 8),
+    ("september", 9),
+    ("sep", 9),
+    ("october", 10),
+    ("november", 11),
+    ("december", 12),
 ];
 
 fn month_number(word: &str) -> Option<u32> {
@@ -1685,8 +1740,8 @@ impl Period {
 pub(crate) fn parse_period(raw: &str, today: NaiveDate) -> Option<Period> {
     let value = fold(raw.trim()).replace(['’', '`'], "'");
     match value.as_str() {
-        "aujourd'hui" | "aujourdhui" | "auj" => return Period::day(today),
-        "hier" => return Period::day(today.pred_opt()?),
+        "aujourd'hui" | "aujourdhui" | "auj" | "today" => return Period::day(today),
+        "hier" | "yesterday" => return Period::day(today.pred_opt()?),
         _ => {}
     }
     if value.len() == 4 && value.chars().all(|c| c.is_ascii_digit()) {
@@ -1740,16 +1795,22 @@ pub(crate) fn parse_query(input: &str, today: NaiveDate) -> SearchQuery {
             text.push(token.clone());
             continue;
         };
-        let key = fold(key);
-        if !matches!(key.as_str(), "de" | "dans" | "a" | "avant" | "apres") {
-            text.push(token.clone());
-            continue;
-        }
+        let key = match fold(key).as_str() {
+            "de" | "from" => "de",
+            "dans" | "in" => "dans",
+            "a" | "has" => "a",
+            "avant" | "before" => "avant",
+            "apres" | "after" => "apres",
+            _ => {
+                text.push(token.clone());
+                continue;
+            }
+        };
         let value = value.trim().to_string();
         if value.is_empty() {
             continue;
         }
-        match key.as_str() {
+        match key {
             "de" => query.from = Some(value),
             "dans" => query.within = Some(value),
             "a" => match SearchKind::parse(&value) {
@@ -2125,6 +2186,95 @@ mod tests {
         let query = parse_query("menu de:\"Jean Dupont\" a:lien avant:\"mars 2024\"", today);
         let again = parse_query(&query.to_input(), today);
         assert_eq!(again, query);
+    }
+
+    #[::core::prelude::v1::test]
+    fn english_operators_are_extracted() {
+        let today = day(2026, 11, 17);
+        let query = parse_query(
+            "from:Alice in:\"Team chat\" has:link before:march 2024 after:yesterday",
+            today,
+        );
+        assert!(query.text.is_empty());
+        assert_eq!(query.from.as_deref(), Some("Alice"));
+        assert_eq!(query.within.as_deref(), Some("Team chat"));
+        assert_eq!(query.kinds, vec![SearchKind::Link]);
+        let before = query.before.unwrap();
+        assert_eq!(before.raw, "march 2024");
+        assert_eq!(before.before_date(), Some(day(2024, 3, 1)));
+        assert_eq!(query.after.unwrap().after_date(), Some(today));
+    }
+
+    #[::core::prelude::v1::test]
+    fn english_kinds_are_recognized() {
+        let query = parse_query(
+            "Has:Photos has:video has:voice has:file has:location",
+            day(2026, 11, 17),
+        );
+        assert_eq!(
+            query.kinds,
+            vec![
+                SearchKind::Photo,
+                SearchKind::Video,
+                SearchKind::Audio,
+                SearchKind::File,
+                SearchKind::Location
+            ]
+        );
+        assert!(query.invalid_kinds.is_empty());
+    }
+
+    #[::core::prelude::v1::test]
+    fn english_dates_are_parsed() {
+        let today = day(2026, 11, 17);
+        assert_eq!(start("today", today), Some(today));
+        assert_eq!(start("Yesterday", today), Some(day(2026, 11, 16)));
+        assert_eq!(start("january", today), Some(day(2026, 1, 1)));
+        assert_eq!(start("Feb 2021", today), Some(day(2021, 2, 1)));
+        assert_eq!(start("March 2024", today), Some(day(2024, 3, 1)));
+        assert_eq!(start("mar", today), Some(day(2026, 3, 1)));
+        assert_eq!(start("May", today), Some(day(2026, 5, 1)));
+        assert_eq!(start("jun 2025", today), Some(day(2025, 6, 1)));
+        assert_eq!(start("July", today), Some(day(2026, 7, 1)));
+        assert_eq!(start("aug. 2021", today), Some(day(2021, 8, 1)));
+        assert_eq!(start("sep 2021", today), Some(day(2021, 9, 1)));
+        assert_eq!(start("Sept 2021", today), Some(day(2021, 9, 1)));
+        assert_eq!(start("October", today), Some(day(2026, 10, 1)));
+        assert_eq!(start("november 2020", today), Some(day(2020, 11, 1)));
+        assert_eq!(start("December", today), Some(day(2025, 12, 1)));
+        assert_eq!(start("tomorrow", today), None);
+        assert_eq!(bound("after:march 2025", today).0, Some(day(2025, 4, 1)));
+        assert_eq!(bound("before:yesterday", today).1, Some(day(2026, 11, 16)));
+    }
+
+    #[::core::prelude::v1::test]
+    fn input_text_uses_english_keywords() {
+        let _guard = crate::i18n::scoped("en");
+        let today = day(2026, 11, 17);
+        let query = parse_query(
+            "menu de:\"Jean Dupont\" dans:Coloc a:vidéo a:gif après:hier avant:\"mars 2024\"",
+            today,
+        );
+        assert_eq!(
+            query.to_input(),
+            "menu from:\"Jean Dupont\" in:Coloc has:video has:gif after:hier before:\"mars 2024\""
+        );
+        assert_eq!(parse_query(&query.to_input(), today), query);
+    }
+
+    #[::core::prelude::v1::test]
+    fn input_text_uses_french_keywords() {
+        let _guard = crate::i18n::scoped("fr");
+        let today = day(2026, 11, 17);
+        let query = parse_query(
+            "menu from:\"Jean Dupont\" in:Coloc has:voice has:gif after:yesterday before:\"march 2024\"",
+            today,
+        );
+        assert_eq!(
+            query.to_input(),
+            "menu de:\"Jean Dupont\" dans:Coloc a:vocal a:gif après:yesterday avant:\"march 2024\""
+        );
+        assert_eq!(parse_query(&query.to_input(), today), query);
     }
 
     #[::core::prelude::v1::test]

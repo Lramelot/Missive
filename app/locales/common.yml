@@ -1,0 +1,61 @@
+_version: 2
+common:
+  weekday:
+    mon:
+      en: Monday
+      fr: lundi
+    tue:
+      en: Tuesday
+      fr: mardi
+    wed:
+      en: Wednesday
+      fr: mercredi
+    thu:
+      en: Thursday
+      fr: jeudi
+    fri:
+      en: Friday
+      fr: vendredi
+    sat:
+      en: Saturday
+      fr: samedi
+    sun:
+      en: Sunday
+      fr: dimanche
+  month_short:
+    jan:
+      en: Jan
+      fr: janv.
+    feb:
+      en: Feb
+      fr: févr.
+    mar:
+      en: Mar
+      fr: mars
+    apr:
+      en: Apr
+      fr: avr.
+    may:
+      en: May
+      fr: mai
+    jun:
+      en: Jun
+      fr: juin
+    jul:
+      en: Jul
+      fr: juil.
+    aug:
+      en: Aug
+      fr: août
+    sep:
+      en: Sep
+      fr: sept.
+    oct:
+      en: Oct
+      fr: oct.
+    nov:
+      en: Nov
+      fr: nov.
+    dec:
+      en: Dec
+      fr: déc.

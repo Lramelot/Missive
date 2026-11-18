@@ -196,9 +196,9 @@ impl MissiveApp {
                         IconName::Mail
                     },
                     if unread {
-                        "Marquer comme lu"
+                        t!("thread_dialogs.menu.mark_read")
                     } else {
-                        "Marquer comme non lu"
+                        t!("thread_dialogs.menu.mark_unread")
                     },
                     false,
                     p,
@@ -215,7 +215,7 @@ impl MissiveApp {
                 menu_item(
                     "menu-accept",
                     IconName::Check,
-                    "Accepter la demande",
+                    t!("thread_dialogs.menu.accept_request"),
                     false,
                     p,
                 )
@@ -229,7 +229,7 @@ impl MissiveApp {
                 menu_item(
                     "menu-unmute",
                     IconName::Bell,
-                    "Réactiver les notifications",
+                    t!("thread_dialogs.menu.unmute"),
                     false,
                     p,
                 )
@@ -241,7 +241,7 @@ impl MissiveApp {
                 menu_item(
                     "menu-mute",
                     IconName::BellOff,
-                    "Mettre en sourdine",
+                    t!("thread_dialogs.menu.mute"),
                     false,
                     p,
                 )
@@ -260,7 +260,7 @@ impl MissiveApp {
                 menu_item(
                     "menu-unarchive",
                     IconName::ArchiveRestore,
-                    "Désarchiver",
+                    t!("thread_dialogs.menu.unarchive"),
                     false,
                     p,
                 )
@@ -275,7 +275,7 @@ impl MissiveApp {
                 menu_item(
                     "menu-archive",
                     IconName::Archive,
-                    "Archiver dans Missive",
+                    t!("thread_dialogs.menu.archive"),
                     false,
                     p,
                 )
@@ -288,7 +288,7 @@ impl MissiveApp {
                 menu_item(
                     "menu-folders",
                     IconName::FolderPlus,
-                    "Ajouter au dossier",
+                    t!("thread_dialogs.menu.add_to_folder"),
                     false,
                     p,
                 )
@@ -309,7 +309,7 @@ impl MissiveApp {
                     menu_item(
                         "menu-folder-remove",
                         IconName::FolderMinus,
-                        format!("Retirer du dossier « {} »", folder.name),
+                        t!("thread_dialogs.menu.remove_from_folder", folder = folder.name),
                         false,
                         p,
                     )
@@ -325,7 +325,7 @@ impl MissiveApp {
                 menu_item(
                     "menu-priority",
                     IconName::Flag,
-                    "Conversation prioritaire",
+                    t!("thread_dialogs.menu.priority"),
                     false,
                     p,
                 )
@@ -346,7 +346,7 @@ impl MissiveApp {
             menu_item(
                 "menu-delete",
                 IconName::Trash,
-                "Supprimer la conversation",
+                t!("thread_dialogs.menu.delete"),
                 true,
                 p,
             )
@@ -364,12 +364,12 @@ impl MissiveApp {
         cx: &mut Context<Self>,
     ) -> Vec<AnyElement> {
         let mut items: Vec<AnyElement> =
-            vec![menu_title("Mettre en sourdine", p).into_any_element()];
-        let choices: [(&'static str, &'static str, Option<i64>); 4] = [
-            ("mute-1h", "Pendant 1 heure", Some(1)),
-            ("mute-8h", "Pendant 8 heures", Some(8)),
-            ("mute-24h", "Pendant 24 heures", Some(24)),
-            ("mute-forever", "Jusqu'à réactivation", None),
+            vec![menu_title(t!("thread_dialogs.menu.mute"), p).into_any_element()];
+        let choices: [(&'static str, SharedString, Option<i64>); 4] = [
+            ("mute-1h", ts!("thread_dialogs.mute.one_hour"), Some(1)),
+            ("mute-8h", ts!("thread_dialogs.mute.eight_hours"), Some(8)),
+            ("mute-24h", ts!("thread_dialogs.mute.one_day"), Some(24)),
+            ("mute-forever", ts!("thread_dialogs.mute.forever"), None),
         ];
         for (id, label, hours) in choices {
             let thread_id = thread_id.to_string();
@@ -398,7 +398,7 @@ impl MissiveApp {
                 menu_item(
                     "mute-off",
                     IconName::Bell,
-                    "Réactiver les notifications",
+                    t!("thread_dialogs.menu.unmute"),
                     false,
                     p,
                 )
@@ -436,9 +436,9 @@ impl MissiveApp {
                         IconName::ShieldCheck
                     },
                     if admin {
-                        "Retirer des administrateurs"
+                        t!("thread_dialogs.member.remove_admin")
                     } else {
-                        "Nommer administrateur"
+                        t!("thread_dialogs.member.make_admin")
                     },
                     false,
                     p,
@@ -454,7 +454,7 @@ impl MissiveApp {
             menu_item(
                 "member-remove",
                 IconName::UserMinus,
-                "Retirer du groupe",
+                t!("thread_dialogs.member.remove"),
                 true,
                 p,
             )
@@ -501,7 +501,7 @@ impl MissiveApp {
                             .child(
                                 Button::new("confirm-cancel")
                                     .ghost()
-                                    .label("Annuler")
+                                    .label(t!("thread_dialogs.button.cancel"))
                                     .on_click(
                                         cx.listener(|this, _, _, cx| this.cancel_confirm(cx)),
                                     ),
@@ -535,13 +535,13 @@ impl MissiveApp {
                         div()
                             .text_size(px(18.))
                             .font_weight(FontWeight::BOLD)
-                            .child("Renommer le groupe"),
+                            .child(ts!("thread_dialogs.rename.title")),
                     )
                     .child(
                         div()
                             .text_size(px(13.))
                             .text_color(p.text_muted)
-                            .child("Tous les membres verront le nouveau nom."),
+                            .child(ts!("thread_dialogs.rename.hint")),
                     )
                     .child(Input::new(&rename.input).large())
                     .child(
@@ -551,13 +551,13 @@ impl MissiveApp {
                             .child(
                                 Button::new("rename-cancel")
                                     .ghost()
-                                    .label("Annuler")
+                                    .label(t!("thread_dialogs.button.cancel"))
                                     .on_click(cx.listener(|this, _, _, cx| this.close_rename(cx))),
                             )
                             .child(
                                 Button::new("rename-save")
                                     .primary()
-                                    .label("Enregistrer")
+                                    .label(t!("thread_dialogs.button.save"))
                                     .on_click(cx.listener(|this, _, _, cx| this.submit_rename(cx))),
                             ),
                     ),
@@ -575,7 +575,7 @@ impl MissiveApp {
         let candidates = self.people_candidates();
         let hover = p.hover;
 
-        let mode_chip = |id: &'static str, label: &'static str, active: bool, to_group: bool| {
+        let mode_chip = |id: &'static str, label: SharedString, active: bool, to_group: bool| {
             div()
                 .id(id)
                 .h(px(30.))
@@ -599,8 +599,18 @@ impl MissiveApp {
             .px_5()
             .pb_3()
             .gap_1p5()
-            .child(mode_chip("people-direct", "Discussion", direct, false))
-            .child(mode_chip("people-group", "Créer un groupe", group, true));
+            .child(mode_chip(
+                "people-direct",
+                ts!("thread_dialogs.people.mode_direct"),
+                direct,
+                false,
+            ))
+            .child(mode_chip(
+                "people-group",
+                ts!("thread_dialogs.people.mode_group"),
+                group,
+                true,
+            ));
 
         let chips: Vec<AnyElement> =
             dialog
@@ -644,26 +654,25 @@ impl MissiveApp {
             .map(|(_, user)| self.person_row(user, direct, dialog.is_selected(&user.id), p, cx))
             .collect();
 
-        let status: Option<&'static str> = if dialog.searching && rows.is_empty() {
-            Some("Recherche…")
+        let status: Option<SharedString> = if dialog.searching && rows.is_empty() {
+            Some(ts!("thread_dialogs.people.searching"))
         } else if rows.is_empty() && !dialog.query.is_empty() {
-            Some("Aucune personne trouvée.")
+            Some(ts!("thread_dialogs.people.no_results"))
         } else if rows.is_empty() {
-            Some("Recherchez une personne par son nom.")
+            Some(ts!("thread_dialogs.people.prompt"))
         } else {
             None
         };
         let section = if dialog.query.is_empty() {
-            "Suggestions"
+            ts!("thread_dialogs.people.suggestions")
         } else {
-            "Personnes"
+            ts!("thread_dialogs.people.results")
         };
         let count = dialog.selected.len();
         let can_submit = if add { count >= 1 } else { count >= 2 };
         let footer_label = match count {
-            0 => "Aucune personne sélectionnée".to_string(),
-            1 => "1 personne sélectionnée".to_string(),
-            n => format!("{n} personnes sélectionnées"),
+            0 => ts!("thread_dialogs.people.selected_none"),
+            n => SharedString::from(tn!("thread_dialogs.people.selected", n)),
         };
 
         scrim()
@@ -689,9 +698,9 @@ impl MissiveApp {
                                     .text_size(px(19.))
                                     .font_weight(FontWeight::EXTRA_BOLD)
                                     .child(if add {
-                                        "Ajouter des personnes"
+                                        ts!("thread_dialogs.people.add_title")
                                     } else {
-                                        "Nouveau message"
+                                        ts!("thread_dialogs.people.new_title")
                                     }),
                             )
                             .child(
@@ -794,13 +803,17 @@ impl MissiveApp {
                                         .flex_1()
                                         .text_size(px(12.5))
                                         .text_color(p.text_muted)
-                                        .child(SharedString::from(footer_label)),
+                                        .child(footer_label),
                                 )
                                 .child(
                                     Button::new("people-submit")
                                         .primary()
                                         .small()
-                                        .label(if add { "Ajouter" } else { "Créer le groupe" })
+                                        .label(if add {
+                                            t!("thread_dialogs.people.add")
+                                        } else {
+                                            t!("thread_dialogs.people.create_group")
+                                        })
                                         .loading(dialog.busy)
                                         .disabled(!can_submit || dialog.busy)
                                         .on_click(cx.listener(|this, _, window, cx| {
@@ -822,10 +835,10 @@ impl MissiveApp {
         cx: &mut Context<Self>,
     ) -> AnyElement {
         let hover = p.hover;
-        let hint: Option<&'static str> = if user.is_friend {
-            Some("Ami·e")
+        let hint: Option<SharedString> = if user.is_friend {
+            Some(ts!("thread_dialogs.people.friend"))
         } else if user.thread_id.is_some() {
-            Some("Discussion existante")
+            Some(ts!("thread_dialogs.people.existing"))
         } else {
             None
         };
@@ -857,7 +870,7 @@ impl MissiveApp {
                             .text_size(px(14.))
                             .font_weight(FontWeight::SEMIBOLD)
                             .child(SharedString::from(if user.name.is_empty() {
-                                "Utilisateur Messenger".to_string()
+                                t!("thread_dialogs.people.unknown_user").to_string()
                             } else {
                                 user.name.clone()
                             })),
@@ -903,7 +916,7 @@ impl MissiveApp {
         cx: &mut Context<Self>,
     ) -> Vec<AnyElement> {
         let mut items: Vec<AnyElement> =
-            vec![menu_title("Ajouter au dossier", p).into_any_element()];
+            vec![menu_title(t!("thread_dialogs.menu.add_to_folder"), p).into_any_element()];
         for (index, folder) in self.settings.folders.iter().enumerate() {
             let inside = folder.thread_ids.iter().any(|id| id == thread_id);
             let (id, folder_id) = (thread_id.to_string(), folder.id.clone());
@@ -936,7 +949,7 @@ impl MissiveApp {
             menu_item(
                 "menu-folder-new",
                 IconName::FolderPlus,
-                "Nouveau dossier…",
+                t!("thread_dialogs.folder.new_item"),
                 false,
                 p,
             )
@@ -960,7 +973,13 @@ impl MissiveApp {
         let (rename_id, delete_id) = (folder.id.clone(), folder.id.clone());
         vec![
             menu_title(folder.name.clone(), p).into_any_element(),
-            menu_item("folder-rename", IconName::Pencil, "Renommer", false, p)
+            menu_item(
+                "folder-rename",
+                IconName::Pencil,
+                t!("thread_dialogs.folder.rename_item"),
+                false,
+                p,
+            )
                 .on_click(cx.listener(move |this, _, window, cx| {
                     this.open_rename_folder(&rename_id, window, cx)
                 }))
@@ -968,7 +987,7 @@ impl MissiveApp {
             menu_item(
                 "folder-delete",
                 IconName::Trash,
-                "Supprimer le dossier",
+                t!("thread_dialogs.folder.delete_item"),
                 true,
                 p,
             )
@@ -986,21 +1005,21 @@ impl MissiveApp {
         let rename = dialog.is_rename();
         let (title, text, button) = if rename {
             (
-                "Renommer le dossier",
-                "Le nouveau nom s'affiche dans les onglets de vos discussions.",
-                "Enregistrer",
+                ts!("thread_dialogs.folder.rename_title"),
+                ts!("thread_dialogs.folder.rename_hint"),
+                ts!("thread_dialogs.button.save"),
             )
         } else if dialog.adds_thread() {
             (
-                "Nouveau dossier",
-                "La discussion sera ajoutée à ce dossier. Les dossiers restent sur cet ordinateur.",
-                "Créer",
+                ts!("thread_dialogs.folder.new_title"),
+                ts!("thread_dialogs.folder.new_with_thread_hint"),
+                ts!("thread_dialogs.button.create"),
             )
         } else {
             (
-                "Nouveau dossier",
-                "Regroupez vos discussions comme vous le souhaitez. Les dossiers restent sur cet ordinateur.",
-                "Créer",
+                ts!("thread_dialogs.folder.new_title"),
+                ts!("thread_dialogs.folder.new_hint"),
+                ts!("thread_dialogs.button.create"),
             )
         };
         scrim()
@@ -1033,7 +1052,7 @@ impl MissiveApp {
                             .child(
                                 Button::new("folder-cancel")
                                     .ghost()
-                                    .label("Annuler")
+                                    .label(t!("thread_dialogs.button.cancel"))
                                     .on_click(
                                         cx.listener(|this, _, _, cx| this.close_folder_dialog(cx)),
                                     ),
@@ -1079,7 +1098,7 @@ impl MissiveApp {
                         div()
                             .text_size(px(18.))
                             .font_weight(FontWeight::BOLD)
-                            .child("Exporter la conversation"),
+                            .child(ts!("thread_dialogs.export.title")),
                     )
                     .child(
                         div()
@@ -1120,7 +1139,7 @@ impl MissiveApp {
                                 .text_size(px(12.5))
                                 .line_height(px(18.))
                                 .text_color(p.text_muted)
-                                .child("Tout l'historique est récupéré depuis Messenger, cela peut prendre plusieurs minutes. Vous pouvez fermer cette fenêtre : une notification s'affichera à la fin."),
+                                .child(ts!("thread_dialogs.export.running_hint")),
                         )
                         .child(
                             h_flex()
@@ -1130,9 +1149,9 @@ impl MissiveApp {
                                     Button::new("export-cancel-job")
                                         .ghost()
                                         .label(if cancelling {
-                                            "Annulation…"
+                                            t!("thread_dialogs.export.cancelling")
                                         } else {
-                                            "Annuler l'export"
+                                            t!("thread_dialogs.export.cancel_job")
                                         })
                                         .disabled(cancelling)
                                         .on_click(
@@ -1142,7 +1161,7 @@ impl MissiveApp {
                                 .child(
                                     Button::new("export-hide")
                                         .primary()
-                                        .label("Masquer")
+                                        .label(t!("thread_dialogs.export.hide"))
                                         .on_click(
                                             cx.listener(|this, _, _, cx| this.close_export(cx)),
                                         ),
@@ -1165,7 +1184,7 @@ impl MissiveApp {
                                         div()
                                             .text_size(px(14.))
                                             .font_weight(FontWeight::SEMIBOLD)
-                                            .child("Export terminé"),
+                                            .child(ts!("thread_dialogs.export.done")),
                                     ),
                             )
                             .child(
@@ -1192,7 +1211,7 @@ impl MissiveApp {
                                     .child(
                                         Button::new("export-close")
                                             .ghost()
-                                            .label("Fermer")
+                                            .label(t!("thread_dialogs.button.close"))
                                             .on_click(
                                                 cx.listener(|this, _, _, cx| this.close_export(cx)),
                                             ),
@@ -1200,7 +1219,7 @@ impl MissiveApp {
                                     .child(
                                         Button::new("export-open")
                                             .primary()
-                                            .label("Ouvrir le dossier")
+                                            .label(t!("thread_dialogs.export.open_folder"))
                                             .on_click(cx.listener(|this, _, _, cx| {
                                                 this.open_export_folder(cx)
                                             })),
@@ -1224,7 +1243,7 @@ impl MissiveApp {
                                 .child(
                                     Button::new("export-close")
                                         .ghost()
-                                        .label("Fermer")
+                                        .label(t!("thread_dialogs.button.close"))
                                         .on_click(
                                             cx.listener(|this, _, _, cx| this.close_export(cx)),
                                         ),
@@ -1232,7 +1251,7 @@ impl MissiveApp {
                                 .child(
                                     Button::new("export-retry")
                                         .primary()
-                                        .label("Réessayer")
+                                        .label(t!("thread_dialogs.export.retry"))
                                         .on_click(cx.listener(|this, _, _, cx| {
                                             this.exports.job = None;
                                             this.start_export(cx);
@@ -1285,14 +1304,14 @@ impl MissiveApp {
                     .dir
                     .as_ref()
                     .map(|dir| dir.to_string_lossy().to_string())
-                    .unwrap_or_else(|| "Aucun dossier choisi".into())
+                    .unwrap_or_else(|| t!("thread_dialogs.export.no_dir").to_string())
                     .into();
                 v_flex()
                     .gap_4()
                     .child(
                         v_flex()
                             .gap_1()
-                            .child(field_label("Format", p))
+                            .child(field_label(t!("thread_dialogs.export.format"), p))
                             .children(formats),
                     )
                     .child(
@@ -1312,13 +1331,13 @@ impl MissiveApp {
                                         div()
                                             .text_size(px(13.5))
                                             .font_weight(FontWeight::SEMIBOLD)
-                                            .child("Inclure les médias"),
+                                            .child(ts!("thread_dialogs.export.include_media")),
                                     )
                                     .child(
                                         div()
                                             .text_size(px(12.))
                                             .text_color(p.text_muted)
-                                            .child("Photos, vidéos, fichiers et messages vocaux, dans un dossier à côté"),
+                                            .child(ts!("thread_dialogs.export.media_hint")),
                                     ),
                             )
                             .on_click(cx.listener(|this, _, _, cx| this.toggle_export_media(cx))),
@@ -1326,7 +1345,7 @@ impl MissiveApp {
                     .child(
                         v_flex()
                             .gap_1p5()
-                            .child(field_label("Dossier de destination", p))
+                            .child(field_label(t!("thread_dialogs.export.destination"), p))
                             .child(
                                 h_flex()
                                     .gap_2()
@@ -1347,7 +1366,7 @@ impl MissiveApp {
                                         Button::new("export-dir")
                                             .outline()
                                             .small()
-                                            .label("Choisir…")
+                                            .label(t!("thread_dialogs.export.choose"))
                                             .on_click(cx.listener(|this, _, _, cx| {
                                                 this.pick_export_dir(cx)
                                             })),
@@ -1359,7 +1378,7 @@ impl MissiveApp {
                             div()
                                 .text_size(px(12.5))
                                 .text_color(p.text_muted)
-                                .child("Un autre export ou téléchargement de médias est en cours. Attendez qu'il se termine ou annulez-le."),
+                                .child(ts!("thread_dialogs.export.busy")),
                         )
                     })
                     .child(
@@ -1369,13 +1388,13 @@ impl MissiveApp {
                             .child(
                                 Button::new("export-cancel")
                                     .ghost()
-                                    .label("Annuler")
+                                    .label(t!("thread_dialogs.button.cancel"))
                                     .on_click(cx.listener(|this, _, _, cx| this.close_export(cx))),
                             )
                             .child(
                                 Button::new("export-start")
                                     .primary()
-                                    .label("Exporter")
+                                    .label(t!("thread_dialogs.export.start"))
                                     .disabled(other_running || dialog.dir.is_none())
                                     .on_click(cx.listener(|this, _, _, cx| this.start_export(cx))),
                             ),
@@ -1437,10 +1456,9 @@ impl MissiveApp {
             .is_some_and(|(id, _)| self.user.as_ref().is_some_and(|user| &user.id == id));
         let typed_person = panel.person.read(cx).value().trim().to_string();
         let mut people: Vec<AnyElement> = vec![
-            pill("panel-me", "Moi", me_active, p)
+            pill("panel-me", t!("library.search.me"), me_active, p)
                 .on_click(cx.listener(move |this, _, window, cx| {
-                    let value = (!me_active).then(|| "moi".to_string());
-                    this.set_search_from(value, window, cx)
+                    this.set_search_from_me(!me_active, window, cx)
                 }))
                 .into_any_element(),
         ];
@@ -1464,7 +1482,12 @@ impl MissiveApp {
                 .as_ref()
                 .is_some_and(|(id, _)| self.selected.as_deref() == Some(id.as_str()));
             conversations.push(
-                pill("panel-current", "Cette conversation", active, p)
+                pill(
+                    "panel-current",
+                    t!("thread_dialogs.search.this_conversation"),
+                    active,
+                    p,
+                )
                     .on_click(cx.listener(move |this, _, window, cx| {
                         let value = (!active).then(|| current.clone());
                         this.set_search_within(value, window, cx)
@@ -1532,7 +1555,7 @@ impl MissiveApp {
                                         div()
                                             .text_size(px(15.))
                                             .font_weight(FontWeight::BOLD)
-                                            .child("Filtrer la recherche"),
+                                            .child(ts!("thread_dialogs.search.title")),
                                     )
                                     .when(has_filters, |el| {
                                         el.child(
@@ -1542,7 +1565,7 @@ impl MissiveApp {
                                                 .font_weight(FontWeight::SEMIBOLD)
                                                 .text_color(accent)
                                                 .cursor_pointer()
-                                                .child("Tout effacer")
+                                                .child(ts!("thread_dialogs.search.clear"))
                                                 .on_click(cx.listener(|this, _, window, cx| {
                                                     this.clear_search_filters(window, cx)
                                                 })),
@@ -1552,26 +1575,29 @@ impl MissiveApp {
                             .child(
                                 v_flex()
                                     .gap_1p5()
-                                    .child(field_label("Contenant", p))
+                                    .child(field_label(t!("thread_dialogs.search.containing"), p))
                                     .child(wrap(kinds)),
                             )
                             .child(
                                 v_flex()
                                     .gap_1p5()
-                                    .child(field_label("Période", p))
+                                    .child(field_label(t!("thread_dialogs.search.period"), p))
                                     .child(wrap(periods)),
                             )
                             .child(
                                 v_flex()
                                     .gap_1p5()
-                                    .child(field_label("Envoyé par", p))
+                                    .child(field_label(t!("thread_dialogs.search.sent_by"), p))
                                     .child(field(&panel.person))
                                     .child(wrap(people)),
                             )
                             .child(
                                 v_flex()
                                     .gap_1p5()
-                                    .child(field_label("Dans la conversation", p))
+                                    .child(field_label(
+                                        t!("thread_dialogs.search.in_conversation"),
+                                        p,
+                                    ))
                                     .child(field(&panel.conversation))
                                     .when(!conversations.is_empty(), |el| {
                                         el.child(wrap(conversations))
@@ -1583,7 +1609,7 @@ impl MissiveApp {
                                     .text_size(px(11.5))
                                     .line_height(px(16.))
                                     .text_color(p.text_faint)
-                                    .child("Vous pouvez aussi taper de:, dans:, a:photo, avant: ou après: dans la recherche, par exemple « après:mars 2024 »."),
+                                    .child(ts!("thread_dialogs.search.help")),
                             ),
                     ),
             )
@@ -1591,12 +1617,12 @@ impl MissiveApp {
     }
 }
 
-fn field_label(text: &'static str, p: &Palette) -> Div {
+fn field_label(text: impl Into<SharedString>, p: &Palette) -> Div {
     div()
         .text_size(px(12.))
         .font_weight(FontWeight::BOLD)
         .text_color(p.text_muted)
-        .child(text)
+        .child(text.into())
 }
 
 fn pill(

@@ -56,7 +56,7 @@ impl MissiveApp {
         }
         cx.on_app_quit(|_, _| async { diagnostics::flush() }).detach();
         if diagnostics::was_restarted() {
-            self.show_toast("Missive a redémarré après une erreur", cx);
+            self.show_toast(t!("system.toast.restarted_after_error"), cx);
         }
 
         self._system_task = Some(cx.spawn_in(window, async move |this, cx| {
@@ -206,7 +206,7 @@ impl MissiveApp {
             return;
         };
         if let Err(err) = updates::apply_and_restart(&info) {
-            self.set_error(err.context("Mise à jour impossible"));
+            self.set_error(err.context(t!("system.error.update_failed").into_owned()));
             cx.notify();
         }
     }
@@ -225,11 +225,30 @@ impl MissiveApp {
         if self.settings.launch_at_login != before.launch_at_login {
             if let Err(err) = desktop::set_launch_at_login(self.settings.launch_at_login) {
                 self.settings.launch_at_login = before.launch_at_login;
-                self.set_error(err.context("Lancement au démarrage impossible"));
+                self.set_error(err.context(t!("system.error.launch_at_login_failed").into_owned()));
             }
         }
         if self.settings.theme != before.theme {
             style::apply_theme(self.settings.theme, Some(window), cx);
+        }
+        if self.settings.language != before.language {
+            crate::i18n::apply(self.settings.language);
+            if let Some(tray) = self.tray.as_ref() {
+                tray.refresh_language();
+            }
+            self.composer.update(cx, |input, cx| {
+                input.set_placeholder(t!("app.composer.placeholder"), window, cx)
+            });
+            self.search.update(cx, |input, cx| {
+                input.set_placeholder(t!("app.search.placeholder"), window, cx)
+            });
+            self.pin_input.update(cx, |input, cx| {
+                input.set_placeholder(t!("app.pin.placeholder"), window, cx)
+            });
+            crate::views::refresh_form_language(window, cx);
+            desktop::reset_taskbar_badge();
+            self.on_appearance_changed(cx);
+            cx.refresh_windows();
         }
         if self.settings.check_updates && !before.check_updates {
             self.check_for_update(cx);
@@ -245,6 +264,15 @@ impl MissiveApp {
         cx: &mut Context<Self>,
     ) {
         self.update_settings(window, cx, |settings| settings.theme = theme);
+    }
+
+    pub(crate) fn set_language(
+        &mut self,
+        language: crate::settings::Language,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.update_settings(window, cx, |settings| settings.language = language);
     }
 
     pub(crate) fn toggle_settings(&mut self, cx: &mut Context<Self>) {
@@ -311,7 +339,7 @@ impl MissiveApp {
             self.drafts.insert(thread_id.to_string(), merged);
         }
         self.persist_drafts(cx);
-        self.show_toast("Réponse gardée en brouillon", cx);
+        self.show_toast(t!("system.toast.reply_kept_as_draft"), cx);
     }
 
     pub(crate) fn set_text_size(
@@ -349,11 +377,12 @@ impl MissiveApp {
     pub(crate) fn copy_diagnostic(&mut self, cx: &mut Context<Self>) {
         let bridge = self.bridge();
         let link = match self.link {
-            Link::Connecting => "connexion en cours",
-            Link::Online => "en ligne",
-            Link::Reconnecting => "reconnexion",
-            Link::Error => "erreur",
-        };
+            Link::Connecting => t!("system.diagnostic.link_connecting"),
+            Link::Online => t!("system.diagnostic.link_online"),
+            Link::Reconnecting => t!("system.diagnostic.link_reconnecting"),
+            Link::Error => t!("system.diagnostic.link_error"),
+        }
+        .into_owned();
         cx.spawn(async move |this, cx| {
             let bridge_result = match bridge {
                 Some(bridge) => {
@@ -362,10 +391,10 @@ impl MissiveApp {
                     match futures::future::select(request, timeout).await {
                         futures::future::Either::Left((Ok(value), _)) => Ok(value),
                         futures::future::Either::Left((Err(err), _)) => Err(format!("{err:#}")),
-                        futures::future::Either::Right(_) => Err("pas de réponse".to_string()),
+                        futures::future::Either::Right(_) => Err(t!("system.diagnostic.no_response").into_owned()),
                     }
                 }
-                None => Err("pont non démarré".to_string()),
+                None => Err(t!("system.diagnostic.bridge_not_started").into_owned()),
             };
             let report = cx
                 .background_executor()
@@ -384,7 +413,7 @@ impl MissiveApp {
                 .await;
             let _ = this.update(cx, |this, cx| {
                 cx.write_to_clipboard(ClipboardItem::new_string(report));
-                this.show_toast("Diagnostic copié", cx);
+                this.show_toast(t!("system.toast.diagnostic_copied"), cx);
             });
         })
         .detach();
@@ -415,7 +444,7 @@ impl MissiveApp {
                         }
                         this.screen = Screen::Login;
                     }
-                    Err(err) => this.set_error(err.context("Déconnexion impossible")),
+                    Err(err) => this.set_error(err.context(t!("system.error.logout_failed").into_owned())),
                 }
                 cx.notify();
             });

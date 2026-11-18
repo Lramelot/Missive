@@ -191,7 +191,7 @@ fn is_request(thread: &Thread) -> bool {
 
 fn thread_label(thread: &Thread) -> String {
     if thread.name.trim().is_empty() {
-        "Conversation".into()
+        t!("thread_ops.conversation").into_owned()
     } else {
         thread.name.clone()
     }
@@ -214,9 +214,9 @@ fn mute_label(thread: &Thread, muted: bool) -> Option<String> {
     }
     match thread.muted_until_ms {
         Some(until) if until > now_ms() => {
-            Some(format!("En sourdine jusqu'à {}", format_until(until)))
+            Some(t!("thread_ops.mute.until", until = format_until(until)).into_owned())
         }
-        _ => Some("En sourdine jusqu'à réactivation".into()),
+        _ => Some(t!("thread_ops.mute.until_unmuted").into_owned()),
     }
 }
 
@@ -227,15 +227,20 @@ fn format_until(timestamp_ms: i64) -> String {
     let days = (time.date_naive() - Local::now().date_naive()).num_days();
     match days {
         0 => time.format("%H:%M").to_string(),
-        1 => format!("demain {}", time.format("%H:%M")),
-        _ => time.format("%d/%m à %H:%M").to_string(),
+        1 => t!("thread_ops.until.tomorrow", time = time.format("%H:%M")).into_owned(),
+        _ => t!(
+            "thread_ops.until.date",
+            date = time.format("%d/%m"),
+            time = time.format("%H:%M")
+        )
+        .into_owned(),
     }
 }
 
 fn ephemeral_label(ttl_ms: i64) -> String {
     let seconds = (ttl_ms / 1000).max(1);
     if seconds > 86_400 && seconds % 86_400 == 0 {
-        format!("{} jours", seconds / 86_400)
+        tn!("thread_ops.ephemeral.days", seconds / 86_400).into_owned()
     } else if seconds >= 3_600 && seconds % 3_600 == 0 {
         format!("{} h", seconds / 3_600)
     } else if seconds >= 60 {
@@ -450,7 +455,7 @@ impl MissiveApp {
         &mut self,
         cmd: &'static str,
         params: Value,
-        success: Option<&'static str>,
+        success: Option<SharedString>,
         rollback: impl FnOnce(&mut Self) + 'static,
         cx: &mut Context<Self>,
     ) {
@@ -588,10 +593,10 @@ impl MissiveApp {
             self.settings
                 .locally_archived
                 .insert(thread_id.to_string(), at);
-            self.show_toast("Discussion archivée dans Missive", cx);
+            self.show_toast(t!("thread_ops.toast.archived"), cx);
         } else {
             self.settings.locally_archived.remove(thread_id);
-            self.show_toast("Discussion désarchivée", cx);
+            self.show_toast(t!("thread_ops.toast.unarchived"), cx);
         }
         self.settings.save();
         if self.filter == Filter::Archived && self.folder_count(Filter::Archived) == 0 {
@@ -629,9 +634,9 @@ impl MissiveApp {
         thread.muted_until_ms = (until_ms != 0).then_some(until_ms);
         let id = thread_id.to_string();
         let success = if until_ms == 0 {
-            "Notifications réactivées"
+            ts!("thread_ops.toast.unmuted")
         } else {
-            "Conversation mise en sourdine"
+            ts!("thread_ops.toast.muted")
         };
         self.thread_command(
             "mute",
@@ -660,7 +665,7 @@ impl MissiveApp {
         self.thread_command(
             "accept_request",
             json!({ "thread_id": id }),
-            Some("Demande acceptée"),
+            Some(ts!("thread_ops.toast.request_accepted")),
             move |this| {
                 if let Some(thread) = this.thread_mut(&id) {
                     thread.folder = previous;
@@ -704,11 +709,9 @@ impl MissiveApp {
                     .map(thread_label)
                     .unwrap_or_default();
                 (
-                    "Supprimer la conversation ?".to_string(),
-                    format!(
-                        "La conversation « {name} » et son historique seront supprimés de votre compte. Cette action est définitive."
-                    ),
-                    "Supprimer",
+                    t!("thread_ops.confirm.delete_thread.title"),
+                    t!("thread_ops.confirm.delete_thread.text", name = name),
+                    t!("thread_ops.confirm.delete_thread.button"),
                     true,
                 )
             }
@@ -718,9 +721,9 @@ impl MissiveApp {
                     .map(thread_label)
                     .unwrap_or_default();
                 (
-                    "Quitter le groupe ?".to_string(),
-                    format!("Vous ne recevrez plus les messages de « {name} »."),
-                    "Quitter",
+                    t!("thread_ops.confirm.leave_group.title"),
+                    t!("thread_ops.confirm.leave_group.text", name = name),
+                    t!("thread_ops.confirm.leave_group.button"),
                     true,
                 )
             }
@@ -730,20 +733,19 @@ impl MissiveApp {
                     .iter()
                     .find(|thread| !thread.is_group && thread.peer_id.as_deref() == Some(user_id))
                     .map(thread_label)
-                    .unwrap_or_else(|| "cette personne".into());
+                    .unwrap_or_else(|| t!("thread_ops.confirm.block.fallback_name").into_owned());
                 if *blocked {
                     (
-                        format!("Bloquer {name} ?"),
-                        "Cette personne ne pourra plus vous envoyer de messages ni vous appeler sur Messenger.".to_string(),
-                        "Bloquer",
+                        t!("thread_ops.confirm.block.title", name = name),
+                        t!("thread_ops.confirm.block.text"),
+                        t!("thread_ops.confirm.block.button"),
                         true,
                     )
                 } else {
                     (
-                        format!("Débloquer {name} ?"),
-                        "Cette personne pourra de nouveau vous contacter sur Messenger."
-                            .to_string(),
-                        "Débloquer",
+                        t!("thread_ops.confirm.unblock.title", name = name),
+                        t!("thread_ops.confirm.unblock.text"),
+                        t!("thread_ops.confirm.unblock.button"),
                         false,
                     )
                 }
@@ -757,10 +759,9 @@ impl MissiveApp {
                     .map(|folder| folder.name.clone())
                     .unwrap_or_default();
                 (
-                    format!("Supprimer le dossier « {name} » ?"),
-                    "Les conversations restent dans vos discussions, seul le dossier disparaît."
-                        .to_string(),
-                    "Supprimer",
+                    t!("thread_ops.confirm.delete_folder.title", name = name),
+                    t!("thread_ops.confirm.delete_folder.text"),
+                    t!("thread_ops.confirm.delete_folder.button"),
                     true,
                 )
             }
@@ -776,11 +777,11 @@ impl MissiveApp {
                     })
                     .map(|participant| participant.name.clone())
                     .filter(|name| !name.is_empty())
-                    .unwrap_or_else(|| "Ce membre".into());
+                    .unwrap_or_else(|| t!("thread_ops.confirm.remove_member.fallback_name").into_owned());
                 (
-                    format!("Retirer {member} du groupe ?"),
-                    format!("{member} ne pourra plus participer à « {group} »."),
-                    "Retirer",
+                    t!("thread_ops.confirm.remove_member.title", member = member),
+                    t!("thread_ops.confirm.remove_member.text", member = member, group = group),
+                    t!("thread_ops.confirm.remove_member.button"),
                     true,
                 )
             }
@@ -826,7 +827,7 @@ impl MissiveApp {
             let _ = this.update(cx, |this, cx| match result {
                 Ok(_) => {
                     this.forget_thread(&thread_id, cx);
-                    this.show_toast("Conversation supprimée", cx);
+                    this.show_toast(t!("thread_ops.toast.thread_deleted"), cx);
                 }
                 Err(err) => this.show_toast(action_error(&err), cx),
             });
@@ -867,7 +868,7 @@ impl MissiveApp {
         self.thread_command(
             "leave_thread",
             json!({ "thread_id": thread_id }),
-            Some("Vous avez quitté le groupe"),
+            Some(ts!("thread_ops.toast.left_group")),
             |_| {},
             cx,
         );
@@ -885,9 +886,9 @@ impl MissiveApp {
             "block_user",
             json!({ "user_id": user_id, "blocked": blocked }),
             Some(if blocked {
-                "Personne bloquée"
+                ts!("thread_ops.toast.blocked")
             } else {
-                "Personne débloquée"
+                ts!("thread_ops.toast.unblocked")
             }),
             move |this| {
                 for (id, previous) in changed {
@@ -913,7 +914,7 @@ impl MissiveApp {
         self.thread_command(
             "remove_participant",
             json!({ "thread_id": thread_id, "user_id": user_id }),
-            Some("Membre retiré du groupe"),
+            Some(ts!("thread_ops.toast.member_removed")),
             move |this| {
                 if let (Some((index, participant)), Some(thread)) = (removed, this.thread_mut(&id))
                 {
@@ -945,9 +946,9 @@ impl MissiveApp {
             "set_admin",
             json!({ "thread_id": thread_id, "user_id": user_id, "admin": admin }),
             Some(if admin {
-                "Administrateur ajouté"
+                ts!("thread_ops.toast.admin_added")
             } else {
-                "Administrateur retiré"
+                ts!("thread_ops.toast.admin_removed")
             }),
             move |this| {
                 let Some(previous) = previous else { return };
@@ -976,7 +977,7 @@ impl MissiveApp {
             .unwrap_or_default();
         let input = cx.new(|cx| {
             InputState::new(window, cx)
-                .placeholder("Nom du groupe")
+                .placeholder(ts!("thread_ops.rename.placeholder"))
                 .default_value(name)
         });
         let subscription = cx.subscribe_in(&input, window, |this, _, event: &InputEvent, _, cx| {
@@ -1020,7 +1021,7 @@ impl MissiveApp {
         self.thread_command(
             "rename_thread",
             json!({ "thread_id": thread_id, "name": name }),
-            Some("Groupe renommé"),
+            Some(ts!("thread_ops.toast.group_renamed")),
             move |this| {
                 if let (Some(previous), Some(thread)) = (previous, this.thread_mut(&id)) {
                     thread.name = previous;
@@ -1035,7 +1036,7 @@ impl MissiveApp {
             files: true,
             directories: false,
             multiple: false,
-            prompt: Some("Choisir".into()),
+            prompt: Some(ts!("thread_ops.pick_image.prompt")),
         });
         let thread_id = thread_id.to_string();
         cx.spawn(async move |this, cx| {
@@ -1052,13 +1053,13 @@ impl MissiveApp {
 
     fn set_thread_image(&mut self, thread_id: String, path: PathBuf, cx: &mut Context<Self>) {
         if !is_image_path(&path) {
-            self.show_toast("Choisissez une image (PNG, JPEG, GIF ou WebP).", cx);
+            self.show_toast(t!("thread_ops.toast.not_an_image"), cx);
             return;
         }
         self.thread_command(
             "set_thread_image",
             json!({ "thread_id": thread_id, "path": path.to_string_lossy() }),
-            Some("Photo du groupe mise à jour"),
+            Some(ts!("thread_ops.toast.group_photo_updated")),
             |_| {},
             cx,
         );
@@ -1085,9 +1086,9 @@ impl MissiveApp {
         cx: &mut Context<Self>,
     ) {
         let input =
-            cx.new(|cx| InputState::new(window, cx).placeholder("Rechercher des personnes"));
+            cx.new(|cx| InputState::new(window, cx).placeholder(ts!("thread_ops.people.search_placeholder")));
         let name_input =
-            cx.new(|cx| InputState::new(window, cx).placeholder("Nom du groupe (facultatif)"));
+            cx.new(|cx| InputState::new(window, cx).placeholder(ts!("thread_ops.people.name_placeholder")));
         let subscriptions =
             vec![
                 cx.subscribe_in(&input, window, |this, _, event: &InputEvent, window, cx| {
@@ -1372,7 +1373,7 @@ impl MissiveApp {
             PeopleMode::Direct => {}
             PeopleMode::Group => {
                 if ids.len() < 2 {
-                    self.show_toast("Choisissez au moins deux personnes.", cx);
+                    self.show_toast(t!("thread_ops.toast.pick_two_people"), cx);
                     return;
                 }
                 let name = dialog.name_input.read(cx).value().trim().to_string();
@@ -1396,7 +1397,7 @@ impl MissiveApp {
                                 } else {
                                     this.adopt_thread(thread);
                                 }
-                                this.show_toast("Groupe créé", cx);
+                                this.show_toast(t!("thread_ops.toast.group_created"), cx);
                             }
                             Err(err) => this.show_toast(action_error(&err), cx),
                         }
@@ -1432,9 +1433,9 @@ impl MissiveApp {
                                 }
                                 this.show_toast(
                                     if ids.len() > 1 {
-                                        "Personnes ajoutées au groupe"
+                                        t!("thread_ops.toast.people_added")
                                     } else {
-                                        "Personne ajoutée au groupe"
+                                        t!("thread_ops.toast.person_added")
                                     },
                                     cx,
                                 );
@@ -1535,13 +1536,10 @@ impl MissiveApp {
         self.thread_ops.menu = None;
         if self.is_priority_thread(thread_id) {
             self.settings.priority_threads.retain(|id| id != thread_id);
-            self.show_toast("Conversation retirée des prioritaires", cx);
+            self.show_toast(t!("thread_ops.toast.priority_removed"), cx);
         } else {
             self.settings.priority_threads.push(thread_id.to_string());
-            self.show_toast(
-                "Conversation prioritaire : elle passe outre les heures calmes",
-                cx,
-            );
+            self.show_toast(t!("thread_ops.toast.priority_added"), cx);
         }
         self.settings.save();
         cx.notify();
@@ -1589,11 +1587,11 @@ impl MissiveApp {
         if inside && !present {
             folder.thread_ids.push(thread_id.to_string());
             self.settings.save();
-            self.show_toast(format!("Ajoutée au dossier « {name} »"), cx);
+            self.show_toast(t!("thread_ops.toast.added_to_folder", name = name), cx);
         } else if !inside && present {
             folder.thread_ids.retain(|id| id != thread_id);
             self.settings.save();
-            self.show_toast(format!("Retirée du dossier « {name} »"), cx);
+            self.show_toast(t!("thread_ops.toast.removed_from_folder", name = name), cx);
         } else {
             cx.notify();
         }
@@ -1639,7 +1637,7 @@ impl MissiveApp {
     ) {
         let input = cx.new(|cx| {
             InputState::new(window, cx)
-                .placeholder("Nom du dossier")
+                .placeholder(ts!("thread_ops.folder.name_placeholder"))
                 .default_value(name)
         });
         let subscription = cx.subscribe_in(&input, window, |this, _, event: &InputEvent, _, cx| {
@@ -1691,7 +1689,7 @@ impl MissiveApp {
                     folder.name = name;
                 }
                 self.settings.save();
-                self.show_toast("Dossier renommé", cx);
+                self.show_toast(t!("thread_ops.toast.folder_renamed"), cx);
             }
             FolderDialogMode::Create { thread_id } => {
                 let id = new_folder_id(&self.settings.folders, now_ms());
@@ -1702,13 +1700,10 @@ impl MissiveApp {
                 });
                 self.settings.save();
                 if thread_id.is_some() {
-                    self.show_toast(format!("Ajoutée au nouveau dossier « {name} »"), cx);
+                    self.show_toast(t!("thread_ops.toast.added_to_new_folder", name = name), cx);
                 } else {
                     self.open_folder(&id, cx);
-                    self.show_toast(
-                        "Dossier créé. Ajoutez-y des discussions par clic droit.",
-                        cx,
-                    );
+                    self.show_toast(t!("thread_ops.toast.folder_created"), cx);
                 }
             }
         }
@@ -1729,24 +1724,22 @@ impl MissiveApp {
             self.thread_ops.folder = None;
         }
         self.settings.save();
-        self.show_toast("Dossier supprimé", cx);
+        self.show_toast(t!("thread_ops.toast.folder_deleted"), cx);
     }
 }
 
 fn folder_name_problem(name: &str, editing: Option<&str>, folders: &[Folder]) -> Option<String> {
     if name.is_empty() {
-        return Some("Donnez un nom au dossier.".into());
+        return Some(t!("thread_ops.folder.name_required").into_owned());
     }
     if name.chars().count() > FOLDER_NAME_MAX {
-        return Some(format!(
-            "Le nom d'un dossier compte au plus {FOLDER_NAME_MAX} caractères."
-        ));
+        return Some(t!("thread_ops.folder.name_too_long", max = FOLDER_NAME_MAX).into_owned());
     }
     let wanted = super::library::fold(name);
     let taken = folders.iter().any(|folder| {
         Some(folder.id.as_str()) != editing && super::library::fold(&folder.name) == wanted
     });
-    taken.then(|| "Un dossier porte déjà ce nom.".into())
+    taken.then(|| t!("thread_ops.folder.name_taken").into_owned())
 }
 
 fn new_folder_id(folders: &[Folder], mut stamp: i64) -> String {
@@ -1793,6 +1786,7 @@ mod tests {
 
     #[::core::prelude::v1::test]
     fn ephemeral_labels_are_readable() {
+        let _guard = crate::i18n::scoped("fr");
         assert_eq!(ephemeral_label(86_400_000), "24 h");
         assert_eq!(ephemeral_label(3_600_000), "1 h");
         assert_eq!(ephemeral_label(7 * 86_400_000), "7 jours");

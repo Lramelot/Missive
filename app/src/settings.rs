@@ -13,6 +13,16 @@ pub enum ThemePreference {
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
+pub enum Language {
+    French,
+    English,
+    #[default]
+    #[serde(other)]
+    Auto,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum TextSize {
     Small,
     #[default]
@@ -73,6 +83,7 @@ pub struct Settings {
     pub close_to_tray: bool,
     pub launch_at_login: bool,
     pub theme: ThemePreference,
+    pub language: Language,
     pub check_updates: bool,
     pub locally_unread: Vec<String>,
     pub locally_archived: HashMap<String, i64>,
@@ -96,6 +107,7 @@ impl Default for Settings {
             close_to_tray: true,
             launch_at_login: false,
             theme: ThemePreference::System,
+            language: Language::Auto,
             check_updates: true,
             locally_unread: Vec::new(),
             locally_archived: HashMap::new(),
@@ -138,12 +150,13 @@ impl Settings {
 
 #[cfg(test)]
 mod tests {
-    use super::{Settings, ThemePreference};
+    use super::{Language, Settings, ThemePreference};
 
     #[::core::prelude::v1::test]
     fn missing_fields_fall_back_to_defaults() {
         let settings: Settings = serde_json::from_str(r#"{"theme":"dark"}"#).unwrap();
         assert_eq!(settings.theme, ThemePreference::Dark);
+        assert_eq!(settings.language, Language::Auto);
         assert!(settings.notifications);
         assert!(settings.close_to_tray);
         assert!(settings.locally_unread.is_empty());

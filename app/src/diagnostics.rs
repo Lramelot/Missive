@@ -453,26 +453,39 @@ pub struct ReportInput {
     pub installed: bool,
     pub demo: bool,
     pub os: String,
-    pub link: &'static str,
+    pub link: String,
     pub bridge: Result<Value, String>,
     pub lines: Vec<String>,
 }
 
 pub fn compose_report(input: &ReportInput, now: DateTime<Utc>) -> String {
-    let yes_no = |value: bool| if value { "oui" } else { "non" };
+    let demo = if input.demo {
+        t!("diagnostics.report.yes")
+    } else {
+        t!("diagnostics.report.no")
+    };
     let bridge = match &input.bridge {
         Ok(value) => serde_json::to_string_pretty(value).unwrap_or_else(|_| value.to_string()),
-        Err(reason) => format!("indisponible ({reason})"),
+        Err(reason) => t!("diagnostics.report.bridge_unavailable", reason = reason).into_owned(),
+    };
+    let installation = if input.installed {
+        String::new()
+    } else {
+        format!(" {}", t!("diagnostics.report.not_installed"))
     };
     let mut report = format!(
-        "Diagnostic Missive\nGénéré le : {}\nVersion : {}{}\nSystème : {}\nMode démo : {}\nConnexion : {}\n\nPont :\n{bridge}\n\nJournal ({} dernières lignes) :\n",
-        now.format("%Y-%m-%dT%H:%M:%SZ"),
-        input.version,
-        if input.installed { "" } else { " (hors installation)" },
-        input.os,
-        yes_no(input.demo),
-        input.link,
-        input.lines.len(),
+        "{}\n\n{}\n{bridge}\n\n{}\n",
+        t!(
+            "diagnostics.report.header",
+            generated = now.format("%Y-%m-%dT%H:%M:%SZ"),
+            version = input.version,
+            installation = installation,
+            system = input.os,
+            demo = demo,
+            link = input.link,
+        ),
+        t!("diagnostics.report.bridge_title"),
+        t!("diagnostics.report.log_title", count = input.lines.len()),
     );
     for line in &input.lines {
         report.push_str(line);
@@ -681,13 +694,14 @@ mod tests {
 
     #[::core::prelude::v1::test]
     fn report_handles_missing_bridge_command() {
+        let _guard = crate::i18n::scoped("fr");
         let at = Utc.with_ymd_and_hms(2026, 11, 17, 8, 0, 0).unwrap();
         let mut input = ReportInput {
             version: "0.1.6".into(),
             installed: true,
             demo: false,
             os: "Windows 11".into(),
-            link: "en ligne",
+            link: "en ligne".into(),
             bridge: Err("unknown command (unknown_command)".into()),
             lines: vec!["l1".into(), "l2".into()],
         };

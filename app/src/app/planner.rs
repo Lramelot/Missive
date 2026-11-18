@@ -1,11 +1,12 @@
 use std::{
+    borrow::Cow,
     collections::HashMap,
     time::{Duration, Instant},
 };
 
 use chrono::{
     Datelike as _, Duration as Span, Local, NaiveDate, NaiveDateTime, NaiveTime, TimeZone as _,
-    Timelike as _,
+    Timelike as _, Weekday,
 };
 use gpui_kit::component::input::{InputEvent, InputState, Position};
 use gpui_kit::*;
@@ -32,17 +33,35 @@ const PREVIEW_CHARS: usize = 160;
 const STABLE_ONLINE_MS: i64 = 20_000;
 const RESUME_GAP_MS: i64 = 5_000;
 const PREFETCH_BACKOFF: Duration = Duration::from_secs(30);
-const UNCONFIRMED: &str = "Envoi non confirmé : vérifiez la conversation avant de réessayer";
-const THREAD_GONE: &str = "Conversation introuvable";
-const ALREADY_SENT: &str = "Ce message a déjà été envoyé";
 
-const WEEKDAYS: [&str; 7] = [
-    "lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi", "dimanche",
-];
-const MONTHS: [&str; 12] = [
-    "janv.", "févr.", "mars", "avr.", "mai", "juin", "juil.", "août", "sept.", "oct.", "nov.",
-    "déc.",
-];
+fn weekday_name(weekday: Weekday) -> Cow<'static, str> {
+    match weekday {
+        Weekday::Mon => t!("common.weekday.mon"),
+        Weekday::Tue => t!("common.weekday.tue"),
+        Weekday::Wed => t!("common.weekday.wed"),
+        Weekday::Thu => t!("common.weekday.thu"),
+        Weekday::Fri => t!("common.weekday.fri"),
+        Weekday::Sat => t!("common.weekday.sat"),
+        Weekday::Sun => t!("common.weekday.sun"),
+    }
+}
+
+fn month_name(month: u32) -> Cow<'static, str> {
+    match month {
+        1 => t!("common.month_short.jan"),
+        2 => t!("common.month_short.feb"),
+        3 => t!("common.month_short.mar"),
+        4 => t!("common.month_short.apr"),
+        5 => t!("common.month_short.may"),
+        6 => t!("common.month_short.jun"),
+        7 => t!("common.month_short.jul"),
+        8 => t!("common.month_short.aug"),
+        9 => t!("common.month_short.sep"),
+        10 => t!("common.month_short.oct"),
+        11 => t!("common.month_short.nov"),
+        _ => t!("common.month_short.dec"),
+    }
+}
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 #[serde(default)]
@@ -150,28 +169,34 @@ fn tonight(now: NaiveDateTime) -> Option<NaiveDateTime> {
     (now.time() < hm(19, 30)).then(|| now.date().and_time(hm(20, 0)))
 }
 
-pub(crate) fn schedule_presets(now: NaiveDateTime) -> Vec<(&'static str, NaiveDateTime)> {
+pub(crate) fn schedule_presets(now: NaiveDateTime) -> Vec<(SharedString, NaiveDateTime)> {
     let today = now.date();
     let mut presets = Vec::new();
     if let Some(at) = tonight(now) {
-        presets.push(("Ce soir à 20:00", at));
+        presets.push((ts!("planner.preset.tonight"), at));
     }
-    presets.push(("Demain à 8:00", (today + Span::days(1)).and_time(hm(8, 0))));
-    presets.push(("Lundi à 9:00", next_monday(today).and_time(hm(9, 0))));
+    presets.push((
+        ts!("planner.preset.tomorrow_morning"),
+        (today + Span::days(1)).and_time(hm(8, 0)),
+    ));
+    presets.push((
+        ts!("planner.preset.monday"),
+        next_monday(today).and_time(hm(9, 0)),
+    ));
     presets
 }
 
-pub(crate) fn reminder_presets(now: NaiveDateTime) -> Vec<(&'static str, NaiveDateTime)> {
+pub(crate) fn reminder_presets(now: NaiveDateTime) -> Vec<(SharedString, NaiveDateTime)> {
     let base = now
         .with_second(0)
         .and_then(|at| at.with_nanosecond(0))
         .unwrap_or(now);
-    let mut presets = vec![("Dans 1 h", base + Span::hours(1))];
+    let mut presets = vec![(ts!("planner.preset.in_one_hour"), base + Span::hours(1))];
     if let Some(at) = tonight(now) {
-        presets.push(("Ce soir à 20:00", at));
+        presets.push((ts!("planner.preset.tonight"), at));
     }
     presets.push((
-        "Demain à 9:00",
+        ts!("planner.preset.tomorrow_nine"),
         (now.date() + Span::days(1)).and_time(hm(9, 0)),
     ));
     presets
@@ -180,8 +205,8 @@ pub(crate) fn reminder_presets(now: NaiveDateTime) -> Vec<(&'static str, NaiveDa
 fn parse_date(text: &str, today: NaiveDate) -> Option<NaiveDate> {
     let lower = text.trim().to_lowercase();
     match lower.as_str() {
-        "aujourd'hui" | "aujourd’hui" => return Some(today),
-        "demain" => return Some(today + Span::days(1)),
+        "aujourd'hui" | "aujourd’hui" | "today" => return Some(today),
+        "demain" | "tomorrow" => return Some(today + Span::days(1)),
         _ => {}
     }
     let parts: Vec<&str> = lower
@@ -240,14 +265,15 @@ pub(crate) fn parse_when(
     date: &str,
     time: &str,
     now: NaiveDateTime,
-) -> Result<NaiveDateTime, &'static str> {
-    let date = parse_date(date, now.date()).ok_or("Date invalide : utilisez JJ/MM/AAAA.")?;
-    let time = parse_time(time).ok_or("Heure invalide : utilisez HH:MM.")?;
+) -> Result<NaiveDateTime, SharedString> {
+    let date =
+        parse_date(date, now.date()).ok_or_else(|| ts!("planner.picker.invalid_date"))?;
+    let time = parse_time(time).ok_or_else(|| ts!("planner.picker.invalid_time"))?;
     let at = date.and_time(time);
     if at <= now {
-        Err("Choisissez un moment dans le futur.")
+        Err(ts!("planner.picker.in_the_past"))
     } else if at > now + Span::days(MAX_AHEAD_DAYS) {
-        Err("Choisissez une date dans moins d'un an.")
+        Err(ts!("planner.picker.too_far"))
     } else {
         Ok(at)
     }
@@ -256,26 +282,30 @@ pub(crate) fn parse_when(
 pub(crate) fn format_when(target: NaiveDateTime, now: NaiveDateTime) -> String {
     let clock = format!("{}:{:02}", target.hour(), target.minute());
     let days = (target.date() - now.date()).num_days();
-    match days {
-        0 => format!("aujourd'hui à {clock}"),
-        1 => format!("demain à {clock}"),
-        -1 => format!("hier à {clock}"),
-        2..=6 => format!(
-            "{} à {clock}",
-            WEEKDAYS[target.weekday().num_days_from_monday() as usize]
+    let label = match days {
+        0 => t!("planner.when.today", clock = clock),
+        1 => t!("planner.when.tomorrow", clock = clock),
+        -1 => t!("planner.when.yesterday", clock = clock),
+        2..=6 => t!(
+            "planner.when.weekday",
+            weekday = weekday_name(target.weekday()),
+            clock = clock
         ),
-        _ if target.year() == now.year() => format!(
-            "le {} {} à {clock}",
-            target.day(),
-            MONTHS[target.month0() as usize]
+        _ if target.year() == now.year() => t!(
+            "planner.when.date",
+            day = target.day(),
+            month = month_name(target.month()),
+            clock = clock
         ),
-        _ => format!(
-            "le {} {} {} à {clock}",
-            target.day(),
-            MONTHS[target.month0() as usize],
-            target.year()
+        _ => t!(
+            "planner.when.date_year",
+            day = target.day(),
+            month = month_name(target.month()),
+            year = target.year(),
+            clock = clock
         ),
-    }
+    };
+    label.to_string()
 }
 
 pub(crate) fn capitalize(text: &str) -> String {
@@ -414,20 +444,22 @@ pub(crate) struct DatePicker {
 }
 
 impl DatePicker {
-    pub(crate) fn title(&self) -> &'static str {
+    pub(crate) fn title(&self) -> SharedString {
         match self.target {
-            PickerTarget::Schedule(_) => "Programmer l'envoi",
-            PickerTarget::Remind(_) => "Me le rappeler",
-            PickerTarget::Reschedule(_) => "Modifier l'heure d'envoi",
-            PickerTarget::MoveReminder(_) => "Modifier le rappel",
+            PickerTarget::Schedule(_) => ts!("planner.picker.title_schedule"),
+            PickerTarget::Remind(_) => ts!("planner.picker.title_remind"),
+            PickerTarget::Reschedule(_) => ts!("planner.picker.title_reschedule"),
+            PickerTarget::MoveReminder(_) => ts!("planner.picker.title_move_reminder"),
         }
     }
 
-    pub(crate) fn confirm_label(&self) -> &'static str {
+    pub(crate) fn confirm_label(&self) -> SharedString {
         match self.target {
-            PickerTarget::Schedule(_) => "Programmer",
-            PickerTarget::Remind(_) => "Créer le rappel",
-            PickerTarget::Reschedule(_) | PickerTarget::MoveReminder(_) => "Enregistrer",
+            PickerTarget::Schedule(_) => ts!("planner.picker.confirm_schedule"),
+            PickerTarget::Remind(_) => ts!("planner.picker.confirm_remind"),
+            PickerTarget::Reschedule(_) | PickerTarget::MoveReminder(_) => {
+                ts!("planner.picker.confirm_save")
+            }
         }
     }
 }
@@ -469,7 +501,7 @@ impl Planner {
         let mut flagged = false;
         for item in scheduled.iter_mut().filter(|item| item.sending) {
             item.sending = false;
-            item.failure = Some(UNCONFIRMED.to_string());
+            item.failure = Some(t!("planner.failure.unconfirmed").to_string());
             flagged = true;
         }
         for item in scheduled.iter_mut().filter(|item| item.waiting()) {
@@ -608,10 +640,7 @@ impl MissiveApp {
             changed |= self.dispatch_scheduled(&id, cx);
         }
         if late > 0 {
-            self.show_toast(
-                "Un message programmé n'a pas pu partir à l'heure : il attend votre décision",
-                cx,
-            );
+            self.show_toast(t!("planner.toast.late"), cx);
         }
 
         let due: Vec<Reminder> = self
@@ -668,7 +697,7 @@ impl MissiveApp {
             return false;
         };
         if !self.threads.is_empty() && !self.threads.iter().any(|t| t.id == item.thread_id) {
-            self.fail_scheduled(id, THREAD_GONE.to_string(), cx);
+            self.fail_scheduled(id, t!("planner.thread_gone").to_string(), cx);
             return true;
         }
         if !self.messages.contains_key(&item.thread_id) {
@@ -723,7 +752,7 @@ impl MissiveApp {
             None => {
                 let item = self.planner.scheduled.remove(index);
                 self.planner.save();
-                self.show_toast(format!("Message programmé envoyé à {}", item.thread_name), cx);
+                self.show_toast(t!("planner.toast.sent", name = item.thread_name), cx);
             }
             Some(reason) => {
                 let id = self.planner.scheduled[index].id.clone();
@@ -742,35 +771,42 @@ impl MissiveApp {
         let item = item.clone();
         self.planner.save();
         let body = if self.settings.notification_preview {
-            format!("{} : {}", item.thread_name, one_line(&item.text, 120))
+            t!(
+                "planner.notification.body",
+                name = item.thread_name,
+                text = one_line(&item.text, 120)
+            )
+            .to_string()
         } else {
-            "Ouvrez Missive pour le renvoyer ou le supprimer".to_string()
+            t!("planner.notification.open_to_retry").to_string()
         };
         let notification = Notification {
-            title: "Message programmé non envoyé".to_string(),
+            title: t!("planner.notification.not_sent_title").to_string(),
             body,
             thread_id: item.thread_id.clone(),
         };
         let clicks = self.clicks.clone();
         cx.background_spawn(async move { notifications::show(notification, clicks) })
             .detach();
-        self.show_toast(
-            format!("Message programmé non envoyé à {}", item.thread_name),
-            cx,
-        );
+        self.show_toast(t!("planner.toast.not_sent", name = item.thread_name), cx);
         cx.notify();
     }
 
     fn fire_reminder(&mut self, reminder: &Reminder, cx: &mut Context<Self>) {
         let body = if !self.settings.notification_preview {
-            "Vous avez demandé un rappel pour un message".to_string()
+            t!("planner.reminder.notification_hidden").to_string()
         } else if reminder.preview.is_empty() {
-            format!("Message dans {}", reminder.thread_name)
+            t!("planner.reminder.notification_in_thread", name = reminder.thread_name).to_string()
         } else {
-            format!("{} : {}", reminder.thread_name, reminder.preview)
+            t!(
+                "planner.notification.body",
+                name = reminder.thread_name,
+                text = reminder.preview
+            )
+            .to_string()
         };
         let notification = Notification {
-            title: "Rappel".to_string(),
+            title: t!("planner.reminder.title").to_string(),
             body,
             thread_id: reminder.thread_id.clone(),
         };
@@ -778,12 +814,12 @@ impl MissiveApp {
         cx.background_spawn(async move { notifications::show(notification, clicks) })
             .detach();
         let toast = if reminder.preview.is_empty() {
-            format!("Rappel · {}", reminder.thread_name)
+            t!("planner.reminder.toast", name = reminder.thread_name)
         } else {
-            format!(
-                "Rappel · {} : {}",
-                reminder.thread_name,
-                one_line(&reminder.preview, 90)
+            t!(
+                "planner.reminder.toast_preview",
+                name = reminder.thread_name,
+                preview = one_line(&reminder.preview, 90)
             )
         };
         self.show_toast(toast, cx);
@@ -840,8 +876,9 @@ impl MissiveApp {
         {
             return;
         }
-        let input =
-            cx.new(|cx| InputState::new(window, cx).placeholder("Rechercher dans les favoris"));
+        let input = cx.new(|cx| {
+            InputState::new(window, cx).placeholder(t!("planner.favorites.search_placeholder"))
+        });
         let subscription = cx.subscribe_in(&input, window, |_, _, event: &InputEvent, _, cx| {
             if let InputEvent::Change = event {
                 cx.notify();
@@ -908,7 +945,7 @@ impl MissiveApp {
             self.planner
                 .favorites
                 .retain(|favorite| favorite.message_id != message.id);
-            self.show_toast("Retiré des favoris", cx);
+            self.show_toast(t!("planner.favorites.removed"), cx);
         } else {
             let thread_name = self
                 .threads
@@ -917,7 +954,7 @@ impl MissiveApp {
                 .map(|thread| thread.name.clone())
                 .unwrap_or_default();
             let sender_name = if message.is_outgoing {
-                "Vous".to_string()
+                t!("planner.favorites.you").to_string()
             } else {
                 message.sender_name.clone()
             };
@@ -931,7 +968,7 @@ impl MissiveApp {
                 kind: describe_attachments(message),
                 added_ms: now_ms(),
             });
-            self.show_toast("Ajouté aux favoris", cx);
+            self.show_toast(t!("planner.favorites.added"), cx);
         }
         self.planner.save_favorites();
         self.remeasure_message(&message.thread_id, &message.id, cx);
@@ -963,7 +1000,7 @@ impl MissiveApp {
         cx: &mut Context<Self>,
     ) {
         if !self.threads.iter().any(|thread| thread.id == thread_id) {
-            self.show_toast("Conversation introuvable", cx);
+            self.show_toast(t!("planner.thread_gone"), cx);
             return;
         }
         self.planner.favorites_view = None;
@@ -988,7 +1025,7 @@ impl MissiveApp {
         cx: &mut Context<Self>,
     ) {
         if !self.threads.iter().any(|thread| thread.id == thread_id) {
-            self.show_toast("Conversation introuvable", cx);
+            self.show_toast(t!("planner.thread_gone"), cx);
             return;
         }
         self.planner.list = None;
@@ -1002,12 +1039,12 @@ impl MissiveApp {
         }
         let thread_id = self.selected.clone()?;
         if !self.pending_files.is_empty() {
-            self.show_toast("Les pièces jointes ne peuvent pas être programmées", cx);
+            self.show_toast(t!("planner.draft.no_attachments"), cx);
             return None;
         }
         let text = self.composer.read(cx).value().trim().to_string();
         if text.is_empty() {
-            self.show_toast("Écrivez d'abord le message à programmer", cx);
+            self.show_toast(t!("planner.draft.empty"), cx);
             return None;
         }
         let thread_name = self
@@ -1089,13 +1126,16 @@ impl MissiveApp {
             ..ScheduledItem::default()
         });
         self.planner.save();
-        self.show_toast(format!("Message programmé {}", when_label(send_at_ms)), cx);
+        self.show_toast(
+            t!("planner.toast.scheduled", when = when_label(send_at_ms)),
+            cx,
+        );
         cx.notify();
     }
 
     pub(crate) fn send_scheduled_now(&mut self, id: &str, cx: &mut Context<Self>) {
         let Some(item) = self.planner.scheduled.iter_mut().find(|item| item.id == id) else {
-            self.show_toast(ALREADY_SENT, cx);
+            self.show_toast(t!("planner.toast.already_sent"), cx);
             return;
         };
         if item.sending {
@@ -1121,7 +1161,7 @@ impl MissiveApp {
                     self.discard_outgoing(stale, cx);
                 }
                 if self.link != Link::Online {
-                    self.show_toast("Le message partira dès le retour de la connexion", cx);
+                    self.show_toast(t!("planner.toast.waiting_for_connection"), cx);
                 }
                 self.tick_planner(cx);
             }
@@ -1150,11 +1190,12 @@ impl MissiveApp {
         let preview = if message.is_outgoing || message.sender_name.is_empty() {
             one_line(&body, PREVIEW_CHARS)
         } else {
-            format!(
-                "{} : {}",
-                message.sender_name,
-                one_line(&body, PREVIEW_CHARS)
+            t!(
+                "planner.reminder.preview",
+                sender = message.sender_name,
+                text = one_line(&body, PREVIEW_CHARS)
             )
+            .to_string()
         };
         ReminderDraft {
             thread_id: message.thread_id.clone(),
@@ -1187,7 +1228,7 @@ impl MissiveApp {
         });
         self.planner.save();
         self.remeasure_message(&thread_id, &message_id, cx);
-        self.show_toast(format!("Rappel prévu {}", when_label(due_ms)), cx);
+        self.show_toast(t!("planner.reminder.set", when = when_label(due_ms)), cx);
         cx.notify();
     }
 
@@ -1198,7 +1239,7 @@ impl MissiveApp {
             .retain(|reminder| reminder.message_id != message.id);
         self.planner.save();
         self.remeasure_message(&message.thread_id, &message.id, cx);
-        self.show_toast("Rappel annulé", cx);
+        self.show_toast(t!("planner.reminder.cancelled"), cx);
         cx.notify();
     }
 
@@ -1239,14 +1280,14 @@ impl MissiveApp {
         capitalize(&when_label(ms))
     }
 
-    pub(crate) fn schedule_choices(&self) -> Vec<(&'static str, i64)> {
+    pub(crate) fn schedule_choices(&self) -> Vec<(SharedString, i64)> {
         schedule_presets(local_now())
             .into_iter()
             .map(|(label, at)| (label, local_ms(at)))
             .collect()
     }
 
-    pub(crate) fn reminder_choices(&self) -> Vec<(&'static str, i64)> {
+    pub(crate) fn reminder_choices(&self) -> Vec<(SharedString, i64)> {
         reminder_presets(local_now())
             .into_iter()
             .map(|(label, at)| (label, local_ms(at)))
@@ -1317,11 +1358,11 @@ impl MissiveApp {
         if let PickerTarget::Reschedule(id) = &target {
             match self.planner.scheduled.iter().find(|item| item.id == *id) {
                 None => {
-                    self.show_toast(ALREADY_SENT, cx);
+                    self.show_toast(t!("planner.toast.already_sent"), cx);
                     return;
                 }
                 Some(item) if item.sending => {
-                    self.show_toast("Ce message est en cours d'envoi", cx);
+                    self.show_toast(t!("planner.toast.sending"), cx);
                     return;
                 }
                 Some(_) => {}
@@ -1347,12 +1388,12 @@ impl MissiveApp {
         let time_value = initial.format("%H:%M").to_string();
         let date = cx.new(|cx| {
             InputState::new(window, cx)
-                .placeholder("JJ/MM/AAAA")
+                .placeholder(t!("planner.picker.date_placeholder"))
                 .default_value(date_value)
         });
         let time = cx.new(|cx| {
             InputState::new(window, cx)
-                .placeholder("HH:MM")
+                .placeholder(t!("planner.picker.time_placeholder"))
                 .default_value(time_value)
         });
         let subscriptions = [&date, &time]
@@ -1399,7 +1440,7 @@ impl MissiveApp {
         let at = match parse_when(&date, &time, local_now()) {
             Ok(at) => local_ms(at),
             Err(error) => {
-                picker.error = Some(error.into());
+                picker.error = Some(error);
                 cx.notify();
                 return;
             }
@@ -1423,8 +1464,8 @@ impl MissiveApp {
                             self.discard_outgoing(stale, cx);
                         }
                     }
-                    Some(_) => self.show_toast("Ce message est en cours d'envoi", cx),
-                    None => self.show_toast(ALREADY_SENT, cx),
+                    Some(_) => self.show_toast(t!("planner.toast.sending"), cx),
+                    None => self.show_toast(t!("planner.toast.already_sent"), cx),
                 }
             }
             PickerTarget::MoveReminder(id) => {
@@ -1499,6 +1540,7 @@ impl MissiveApp {
 #[cfg(test)]
 mod tests {
     use chrono::{NaiveDate, NaiveDateTime};
+    use gpui_kit::SharedString;
 
     use super::{
         Due, OVERDUE_GRACE_MS, due_state, format_when, match_snippets, parse_when,
@@ -1522,14 +1564,15 @@ mod tests {
 
     #[::core::prelude::v1::test]
     fn schedule_presets_follow_the_clock() {
+        let _guard = crate::i18n::scoped("fr");
         let wednesday_morning = at(2026, 11, 18, 10, 0);
         let presets = schedule_presets(wednesday_morning);
         assert_eq!(
             presets,
             vec![
-                ("Ce soir à 20:00", at(2026, 11, 18, 20, 0)),
-                ("Demain à 8:00", at(2026, 11, 19, 8, 0)),
-                ("Lundi à 9:00", at(2026, 11, 23, 9, 0)),
+                (SharedString::from("Ce soir à 20:00"), at(2026, 11, 18, 20, 0)),
+                (SharedString::from("Demain à 8:00"), at(2026, 11, 19, 8, 0)),
+                (SharedString::from("Lundi à 9:00"), at(2026, 11, 23, 9, 0)),
             ]
         );
         let evening = at(2026, 11, 18, 19, 30);
@@ -1542,6 +1585,7 @@ mod tests {
 
     #[::core::prelude::v1::test]
     fn reminder_presets_round_to_the_minute() {
+        let _guard = crate::i18n::scoped("fr");
         let now = NaiveDate::from_ymd_opt(2026, 11, 18)
             .unwrap()
             .and_hms_opt(19, 45, 31)
@@ -1550,10 +1594,20 @@ mod tests {
         assert_eq!(
             presets,
             vec![
-                ("Dans 1 h", at(2026, 11, 18, 20, 45)),
-                ("Demain à 9:00", at(2026, 11, 19, 9, 0)),
+                (SharedString::from("Dans 1 h"), at(2026, 11, 18, 20, 45)),
+                (SharedString::from("Demain à 9:00"), at(2026, 11, 19, 9, 0)),
             ]
         );
+    }
+
+    #[::core::prelude::v1::test]
+    fn presets_speak_english() {
+        let _guard = crate::i18n::scoped("en");
+        let presets = schedule_presets(at(2026, 11, 18, 10, 0));
+        assert_eq!(presets[0].0, "Tonight at 20:00");
+        assert_eq!(presets[1].0, "Tomorrow at 8:00");
+        assert_eq!(presets[2].0, "Monday at 9:00");
+        assert_eq!(reminder_presets(at(2026, 11, 18, 21, 0))[0].0, "In 1 hour");
     }
 
     #[::core::prelude::v1::test]
@@ -1589,13 +1643,63 @@ mod tests {
     }
 
     #[::core::prelude::v1::test]
+    fn picker_accepts_english_and_french_words_in_english() {
+        let _guard = crate::i18n::scoped("en");
+        let now = at(2026, 11, 18, 10, 0);
+        assert_eq!(parse_when("today", "11:00", now), Ok(at(2026, 11, 18, 11, 0)));
+        assert_eq!(parse_when("Tomorrow", "7", now), Ok(at(2026, 11, 19, 7, 0)));
+        assert_eq!(parse_when("demain", "7", now), Ok(at(2026, 11, 19, 7, 0)));
+        assert_eq!(parse_when("aujourd’hui", "11:00", now), Ok(at(2026, 11, 18, 11, 0)));
+        assert_eq!(parse_when("02/01", "9:15", now), Ok(at(2027, 1, 2, 9, 15)));
+        assert_eq!(
+            parse_when("soon", "09:00", now),
+            Err(SharedString::from("Invalid date: use DD/MM/YYYY."))
+        );
+        assert_eq!(
+            parse_when("today", "09:00", now),
+            Err(SharedString::from("Pick a time in the future."))
+        );
+    }
+
+    #[::core::prelude::v1::test]
+    fn picker_accepts_english_words_in_french() {
+        let _guard = crate::i18n::scoped("fr");
+        let now = at(2026, 11, 18, 10, 0);
+        assert_eq!(parse_when("demain", "7", now), Ok(at(2026, 11, 19, 7, 0)));
+        assert_eq!(parse_when("tomorrow", "7", now), Ok(at(2026, 11, 19, 7, 0)));
+        assert_eq!(parse_when("today", "11h", now), Ok(at(2026, 11, 18, 11, 0)));
+        assert_eq!(
+            parse_when("bientôt", "09:00", now),
+            Err(SharedString::from("Date invalide : utilisez JJ/MM/AAAA."))
+        );
+        assert_eq!(
+            parse_when("19/11/2026", "25:00", now),
+            Err(SharedString::from("Heure invalide : utilisez HH:MM."))
+        );
+    }
+
+    #[::core::prelude::v1::test]
     fn relative_labels() {
+        let _guard = crate::i18n::scoped("fr");
         let now = at(2026, 11, 18, 10, 0);
         assert_eq!(format_when(at(2026, 11, 18, 20, 0), now), "aujourd'hui à 20:00");
         assert_eq!(format_when(at(2026, 11, 19, 8, 0), now), "demain à 8:00");
+        assert_eq!(format_when(at(2026, 11, 17, 9, 5), now), "hier à 9:05");
         assert_eq!(format_when(at(2026, 11, 23, 9, 5), now), "lundi à 9:05");
         assert_eq!(format_when(at(2026, 12, 2, 9, 0), now), "le 2 déc. à 9:00");
         assert_eq!(format_when(at(2027, 1, 2, 9, 0), now), "le 2 janv. 2027 à 9:00");
+    }
+
+    #[::core::prelude::v1::test]
+    fn relative_labels_in_english() {
+        let _guard = crate::i18n::scoped("en");
+        let now = at(2026, 11, 18, 10, 0);
+        assert_eq!(format_when(at(2026, 11, 18, 9, 5), now), "today at 9:05");
+        assert_eq!(format_when(at(2026, 11, 19, 9, 5), now), "tomorrow at 9:05");
+        assert_eq!(format_when(at(2026, 11, 17, 9, 5), now), "yesterday at 9:05");
+        assert_eq!(format_when(at(2026, 11, 23, 9, 5), now), "Monday at 9:05");
+        assert_eq!(format_when(at(2026, 12, 2, 9, 0), now), "Dec 2 at 9:00");
+        assert_eq!(format_when(at(2027, 11, 5, 9, 5), now), "Nov 5, 2027 at 9:05");
     }
 
     #[::core::prelude::v1::test]

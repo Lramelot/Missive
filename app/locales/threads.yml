@@ -1,0 +1,519 @@
+_version: 2
+thread_ops:
+  conversation:
+    en: "Conversation"
+    fr: "Conversation"
+  until:
+    tomorrow:
+      en: "tomorrow at %{time}"
+      fr: "demain %{time}"
+    date:
+      en: "%{date} at %{time}"
+      fr: "%{date} à %{time}"
+  mute:
+    until:
+      en: "Muted until %{until}"
+      fr: "En sourdine jusqu'à %{until}"
+    until_unmuted:
+      en: "Muted until you turn notifications back on"
+      fr: "En sourdine jusqu'à réactivation"
+  ephemeral:
+    days:
+      one:
+        en: "%{count} day"
+        fr: "%{count} jour"
+      other:
+        en: "%{count} days"
+        fr: "%{count} jours"
+  pick_image:
+    prompt:
+      en: "Choose"
+      fr: "Choisir"
+  rename:
+    placeholder:
+      en: "Group name"
+      fr: "Nom du groupe"
+  people:
+    search_placeholder:
+      en: "Search for people"
+      fr: "Rechercher des personnes"
+    name_placeholder:
+      en: "Group name (optional)"
+      fr: "Nom du groupe (facultatif)"
+  folder:
+    name_placeholder:
+      en: "Folder name"
+      fr: "Nom du dossier"
+    name_required:
+      en: "Give the folder a name."
+      fr: "Donnez un nom au dossier."
+    name_too_long:
+      en: "A folder name can have at most %{max} characters."
+      fr: "Le nom d'un dossier compte au plus %{max} caractères."
+    name_taken:
+      en: "A folder with this name already exists."
+      fr: "Un dossier porte déjà ce nom."
+  toast:
+    archived:
+      en: "Chat archived in Missive"
+      fr: "Discussion archivée dans Missive"
+    unarchived:
+      en: "Chat unarchived"
+      fr: "Discussion désarchivée"
+    unmuted:
+      en: "Notifications turned back on"
+      fr: "Notifications réactivées"
+    muted:
+      en: "Conversation muted"
+      fr: "Conversation mise en sourdine"
+    request_accepted:
+      en: "Request accepted"
+      fr: "Demande acceptée"
+    thread_deleted:
+      en: "Conversation deleted"
+      fr: "Conversation supprimée"
+    left_group:
+      en: "You left the group"
+      fr: "Vous avez quitté le groupe"
+    blocked:
+      en: "Person blocked"
+      fr: "Personne bloquée"
+    unblocked:
+      en: "Person unblocked"
+      fr: "Personne débloquée"
+    member_removed:
+      en: "Member removed from the group"
+      fr: "Membre retiré du groupe"
+    admin_added:
+      en: "Admin added"
+      fr: "Administrateur ajouté"
+    admin_removed:
+      en: "Admin removed"
+      fr: "Administrateur retiré"
+    group_renamed:
+      en: "Group renamed"
+      fr: "Groupe renommé"
+    not_an_image:
+      en: "Choose an image (PNG, JPEG, GIF or WebP)."
+      fr: "Choisissez une image (PNG, JPEG, GIF ou WebP)."
+    group_photo_updated:
+      en: "Group photo updated"
+      fr: "Photo du groupe mise à jour"
+    pick_two_people:
+      en: "Choose at least two people."
+      fr: "Choisissez au moins deux personnes."
+    group_created:
+      en: "Group created"
+      fr: "Groupe créé"
+    people_added:
+      en: "People added to the group"
+      fr: "Personnes ajoutées au groupe"
+    person_added:
+      en: "Person added to the group"
+      fr: "Personne ajoutée au groupe"
+    priority_removed:
+      en: "Conversation removed from priorities"
+      fr: "Conversation retirée des prioritaires"
+    priority_added:
+      en: "Priority conversation: it bypasses quiet hours"
+      fr: "Conversation prioritaire : elle passe outre les heures calmes"
+    added_to_folder:
+      en: "Added to folder “%{name}”"
+      fr: "Ajoutée au dossier « %{name} »"
+    removed_from_folder:
+      en: "Removed from folder “%{name}”"
+      fr: "Retirée du dossier « %{name} »"
+    folder_renamed:
+      en: "Folder renamed"
+      fr: "Dossier renommé"
+    added_to_new_folder:
+      en: "Added to the new folder “%{name}”"
+      fr: "Ajoutée au nouveau dossier « %{name} »"
+    folder_created:
+      en: "Folder created. Add chats to it with a right-click."
+      fr: "Dossier créé. Ajoutez-y des discussions par clic droit."
+    folder_deleted:
+      en: "Folder deleted"
+      fr: "Dossier supprimé"
+  confirm:
+    delete_thread:
+      title:
+        en: "Delete conversation?"
+        fr: "Supprimer la conversation ?"
+      text:
+        en: "The conversation “%{name}” and its history will be deleted from your account. This can't be undone."
+        fr: "La conversation « %{name} » et son historique seront supprimés de votre compte. Cette action est définitive."
+      button:
+        en: "Delete"
+        fr: "Supprimer"
+    leave_group:
+      title:
+        en: "Leave group?"
+        fr: "Quitter le groupe ?"
+      text:
+        en: "You will no longer receive messages from “%{name}”."
+        fr: "Vous ne recevrez plus les messages de « %{name} »."
+      button:
+        en: "Leave"
+        fr: "Quitter"
+    block:
+      fallback_name:
+        en: "this person"
+        fr: "cette personne"
+      title:
+        en: "Block %{name}?"
+        fr: "Bloquer %{name} ?"
+      text:
+        en: "This person won't be able to send you messages or call you on Messenger."
+        fr: "Cette personne ne pourra plus vous envoyer de messages ni vous appeler sur Messenger."
+      button:
+        en: "Block"
+        fr: "Bloquer"
+    unblock:
+      title:
+        en: "Unblock %{name}?"
+        fr: "Débloquer %{name} ?"
+      text:
+        en: "This person will be able to contact you on Messenger again."
+        fr: "Cette personne pourra de nouveau vous contacter sur Messenger."
+      button:
+        en: "Unblock"
+        fr: "Débloquer"
+    delete_folder:
+      title:
+        en: "Delete folder “%{name}”?"
+        fr: "Supprimer le dossier « %{name} » ?"
+      text:
+        en: "The conversations stay in your chats, only the folder goes away."
+        fr: "Les conversations restent dans vos discussions, seul le dossier disparaît."
+      button:
+        en: "Delete"
+        fr: "Supprimer"
+    remove_member:
+      fallback_name:
+        en: "This member"
+        fr: "Ce membre"
+      title:
+        en: "Remove %{member} from the group?"
+        fr: "Retirer %{member} du groupe ?"
+      text:
+        en: "%{member} will no longer be able to take part in “%{group}”."
+        fr: "%{member} ne pourra plus participer à « %{group} »."
+      button:
+        en: "Remove"
+        fr: "Retirer"
+conversation:
+  empty:
+    title:
+      en: "Your chats"
+      fr: "Vos discussions"
+    text:
+      en: "Choose a conversation from the list."
+      fr: "Choisissez une conversation dans la liste."
+  jump_to_latest:
+    en: "Latest messages"
+    fr: "Derniers messages"
+  typing:
+    someone:
+      en: "Someone is typing"
+      fr: "Quelqu'un écrit"
+    person:
+      en: "%{name} is typing"
+      fr: "%{name} écrit"
+  find:
+    searching:
+      en: "Searching…"
+      fr: "Recherche…"
+    no_results:
+      en: "No results"
+      fr: "Aucun résultat"
+    none_loaded:
+      en: "No loaded results"
+      fr: "Aucun résultat chargé"
+    search_further:
+      en: "Search further back"
+      fr: "Chercher plus loin"
+    older:
+      en: "Older (Enter)"
+      fr: "Plus ancien (Entrée)"
+    newer:
+      en: "Newer (Shift+Enter)"
+      fr: "Plus récent (Maj+Entrée)"
+    close:
+      en: "Close (Esc)"
+      fr: "Fermer (Échap)"
+  subtitle:
+    typing:
+      en: "typing…"
+      fr: "écrit…"
+    request:
+      en: "Message request"
+      fr: "Demande de message"
+    online:
+      en: "Online"
+      fr: "En ligne"
+    activity_members:
+      one:
+        en: "%{label}, %{count} member"
+        fr: "%{label}, %{count} membre"
+      other:
+        en: "%{label}, %{count} members"
+        fr: "%{label}, %{count} membres"
+    group_members:
+      one:
+        en: "Group, %{count} member"
+        fr: "Groupe, %{count} membre"
+      other:
+        en: "Group, %{count} members"
+        fr: "Groupe, %{count} membres"
+    group:
+      en: "Group"
+      fr: "Groupe"
+  e2ee:
+    en: "End-to-end encrypted"
+    fr: "Chiffré de bout en bout"
+  header:
+    view_profile:
+      en: "View Facebook profile"
+      fr: "Voir le profil Facebook"
+    open_popout:
+      en: "Open in a separate window"
+      fr: "Ouvrir dans une fenêtre séparée"
+    info:
+      en: "Conversation info"
+      fr: "Informations sur la conversation"
+  request:
+    title:
+      en: "%{name} wants to send you a message"
+      fr: "%{name} souhaite vous envoyer un message"
+    text:
+      en: "Accept to reply and move the conversation to your chats. Until you accept the request, the sender can't tell that you've seen their messages."
+      fr: "Acceptez pour répondre et déplacer la conversation dans vos discussions. Tant que la demande n'est pas acceptée, l'expéditeur ne sait pas que vous avez vu ses messages."
+    delete:
+      en: "Delete"
+      fr: "Supprimer"
+    accept:
+      en: "Accept"
+      fr: "Accepter"
+  blocked:
+    text:
+      en: "You blocked %{name}. This person can no longer message you."
+      fr: "Vous avez bloqué %{name}. Cette personne ne peut plus vous écrire."
+    unblock:
+      en: "Unblock"
+      fr: "Débloquer"
+  info:
+    notifications_on:
+      en: "Notifications on"
+      fr: "Notifications actives"
+    priority:
+      en: "Priority conversation"
+      fr: "Conversation prioritaire"
+    priority_hint:
+      en: "Bypasses quiet hours"
+      fr: "Passe outre les heures calmes"
+    downloading:
+      en: "Downloading… %{progress}"
+      fr: "Téléchargement… %{progress}"
+    download_all:
+      en: "Download all media…"
+      fr: "Télécharger tous les médias…"
+    cancelling:
+      en: "Cancelling…"
+      fr: "Annulation…"
+    cancel:
+      en: "Cancel"
+      fr: "Annuler"
+    open_media_folder:
+      en: "Open media folder"
+      fr: "Ouvrir le dossier des médias"
+    export_section:
+      en: "Export"
+      fr: "Exporter"
+    exporting:
+      en: "Exporting…"
+      fr: "Export en cours…"
+    export:
+      en: "Export conversation…"
+      fr: "Exporter la conversation…"
+    customize:
+      en: "Customize"
+      fr: "Personnaliser"
+    rename_group:
+      en: "Rename group"
+      fr: "Renommer le groupe"
+    change_photo:
+      en: "Change photo"
+      fr: "Changer la photo"
+    add_people:
+      en: "Add people"
+      fr: "Ajouter des personnes"
+    accept_request:
+      en: "Accept request"
+      fr: "Accepter la demande"
+    leave_group:
+      en: "Leave group"
+      fr: "Quitter le groupe"
+    unblock:
+      en: "Unblock %{name}"
+      fr: "Débloquer %{name}"
+    block:
+      en: "Block %{name}"
+      fr: "Bloquer %{name}"
+    delete_thread:
+      en: "Delete conversation"
+      fr: "Supprimer la conversation"
+    ephemeral:
+      en: "Disappearing messages: %{label}"
+      fr: "Messages éphémères : %{label}"
+    group_chat:
+      en: "Group chat"
+      fr: "Discussion de groupe"
+    shared_media:
+      en: "Shared media"
+      fr: "Médias partagés"
+    see_all:
+      en: "See all"
+      fr: "Tout voir"
+    no_photos:
+      en: "No photos in the loaded messages."
+      fr: "Aucune photo dans les messages chargés."
+    photos_videos:
+      en: "Photos and videos"
+      fr: "Photos et vidéos"
+    files:
+      en: "Files"
+      fr: "Fichiers"
+    links:
+      en: "Links"
+      fr: "Liens"
+    privacy:
+      en: "Privacy"
+      fr: "Confidentialité"
+  members:
+    you:
+      en: "You"
+      fr: "Vous"
+    admin:
+      en: "Admin"
+      fr: "Admin"
+    title:
+      en: "Members · %{count}"
+      fr: "Membres · %{count}"
+sidebar:
+  empty:
+    requests:
+      en: "No message requests"
+      fr: "Aucune demande de message"
+    archived:
+      en: "No archived chats"
+      fr: "Aucune discussion archivée"
+    folder:
+      en: "No chats in this folder. Add some with a right-click on a chat."
+      fr: "Aucune discussion dans ce dossier. Ajoutez-en par clic droit sur une discussion."
+    unread:
+      en: "No unread chats"
+      fr: "Aucune discussion non lue"
+    groups:
+      en: "No groups"
+      fr: "Aucun groupe"
+    all:
+      en: "No chats"
+      fr: "Aucune discussion"
+  title:
+    requests:
+      en: "Requests"
+      fr: "Demandes"
+    archived:
+      en: "Archived"
+      fr: "Archivées"
+    chats:
+      en: "Chats"
+      fr: "Discussions"
+  new_message:
+    en: "New message"
+    fr: "Nouveau message"
+  search_filters:
+    en: "Search filters"
+    fr: "Filtres de recherche"
+  rail:
+    chats:
+      en: "Chats"
+      fr: "Discussions"
+    requests:
+      en: "Message requests"
+      fr: "Demandes de message"
+    archived:
+      en: "Archived"
+      fr: "Archivées"
+    favorites:
+      en: "Favorites"
+      fr: "Favoris"
+    scheduled:
+      en: "Scheduled"
+      fr: "Programmés"
+    light_theme:
+      en: "Light theme"
+      fr: "Thème clair"
+    dark_theme:
+      en: "Dark theme"
+      fr: "Thème sombre"
+    settings:
+      en: "Settings"
+      fr: "Paramètres"
+  search:
+    searching:
+      en: "Searching…"
+      fr: "Recherche…"
+    no_results:
+      en: "No results"
+      fr: "Aucun résultat"
+    chats:
+      en: "Chats"
+      fr: "Discussions"
+    messages:
+      en: "Messages"
+      fr: "Messages"
+    result_count:
+      one:
+        en: "%{count} result"
+        fr: "%{count} résultat"
+      other:
+        en: "%{count} results"
+        fr: "%{count} résultats"
+  conversation:
+    en: "Conversation"
+    fr: "Conversation"
+  you:
+    en: "You"
+    fr: "Vous"
+  remove_filter:
+    en: "Remove this filter"
+    fr: "Retirer ce filtre"
+  tabs:
+    all:
+      en: "All"
+      fr: "Toutes"
+    unread:
+      en: "Unread"
+      fr: "Non lues"
+    groups:
+      en: "Groups"
+      fr: "Groupes"
+  new_folder:
+    en: "New folder"
+    fr: "Nouveau dossier"
+  history:
+    title:
+      en: "Encrypted history not restored"
+      fr: "Historique chiffré non restauré"
+    text:
+      en: "Your private conversations don't show their messages yet."
+      fr: "Vos conversations privées n'affichent pas encore leurs messages."
+    restore:
+      en: "Restore with my PIN"
+      fr: "Restaurer avec mon PIN"
+  row:
+    typing:
+      en: "typing"
+      fr: "écrit"

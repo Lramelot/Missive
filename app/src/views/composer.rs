@@ -137,7 +137,7 @@ impl MissiveApp {
                 self.find.emoji.is_some(),
                 p,
             )
-            .tooltip(|window, cx| Tooltip::new("Emojis").build(window, cx))
+            .tooltip(|window, cx| Tooltip::new(ts!("composer.emoji.tooltip")).build(window, cx))
             .on_click(cx.listener(|this, _, window, cx| this.toggle_emoji_picker(window, cx)))
             .into_any_element()
         });
@@ -148,7 +148,7 @@ impl MissiveApp {
             Some(
                 context_bar(
                     IconName::Pencil,
-                    "Modification du message".into(),
+                    t!("composer.context.editing").to_string(),
                     message_summary(message),
                     p,
                 )
@@ -164,9 +164,9 @@ impl MissiveApp {
                 context_bar(
                     IconName::Reply,
                     if quoted.is_outgoing {
-                        "Réponse à vous-même".to_string()
+                        t!("composer.context.reply_to_self").to_string()
                     } else {
-                        format!("Réponse à {}", quoted.sender_name)
+                        t!("composer.context.reply_to", name = &quoted.sender_name).to_string()
                     },
                     message_summary(quoted),
                     p,
@@ -323,14 +323,14 @@ impl MissiveApp {
             })
             .collect();
         let title = if searching {
-            "Résultats"
+            ts!("composer.emoji.results")
         } else {
             picker.tab.label()
         };
         let empty = if searching {
-            "Aucun emoji trouvé"
+            ts!("composer.emoji.none_found")
         } else {
-            "Les emojis que vous utilisez apparaîtront ici."
+            ts!("composer.emoji.recent_hint")
         };
         let cells: Vec<AnyElement> = results
             .iter()
@@ -376,7 +376,7 @@ impl MissiveApp {
             None => div()
                 .text_size(px(12.5))
                 .text_color(p.text_faint)
-                .child("Survolez un emoji pour l'aperçu")
+                .child(ts!("composer.emoji.hover_hint"))
                 .into_any_element(),
         };
         Some(
@@ -465,16 +465,17 @@ impl MissiveApp {
         cx: &mut Context<Self>,
     ) -> Option<AnyElement> {
         let (count, overdue, next) = self.planner.thread_summary(&thread.id)?;
-        let plural = if count > 1 { "s" } else { "" };
         let text = if overdue > 0 {
-            format!("{count} message{plural} programmé{plural} · {overdue} à vérifier")
+            tn!("composer.scheduled.overdue", count, overdue = overdue).to_string()
         } else if count == 1 {
-            format!("1 message programmé · {}", self.planner_when(next))
+            t!("composer.scheduled.single", when = self.planner_when(next)).to_string()
         } else {
-            format!(
-                "{count} messages programmés · prochain {}",
-                self.planner_when(next)
+            t!(
+                "composer.scheduled.multiple",
+                count = count,
+                when = self.planner_when(next)
             )
+            .to_string()
         };
         let accent = if overdue > 0 { p.danger } else { p.accent_text };
         Some(
@@ -512,7 +513,7 @@ impl MissiveApp {
                         .text_color(accent)
                         .cursor_pointer()
                         .hover(|style| style.underline())
-                        .child("Voir")
+                        .child(ts!("composer.scheduled.view"))
                         .on_click(cx.listener(|this, _, _, cx| this.open_scheduled(cx))),
                 )
                 .into_any_element(),
@@ -548,7 +549,7 @@ impl MissiveApp {
                         .flex_1()
                         .min_w_0()
                         .truncate()
-                        .child("Lecture discrète — l'expéditeur ne sait pas que vous avez lu"),
+                        .child(ts!("composer.discreet.notice")),
                 )
                 .child(
                     div()
@@ -557,7 +558,7 @@ impl MissiveApp {
                         .font_weight(FontWeight::SEMIBOLD)
                         .cursor_pointer()
                         .hover(|style| style.underline())
-                        .child("Marquer comme lu")
+                        .child(ts!("composer.discreet.mark_read"))
                         .on_click(cx.listener(move |this, _, _, cx| {
                             this.mark_thread_read(&thread_id, cx);
                             cx.notify();
@@ -593,7 +594,7 @@ impl MissiveApp {
                         .text_size(px(13.))
                         .text_color(p.text_muted)
                         .child(Icon::new(IconName::Zap).size(px(15.)).text_color(p.accent_text))
-                        .child("Ajoutez des réponses rapides dans Paramètres")
+                        .child(ts!("composer.snippets.add_hint"))
                         .on_click(cx.listener(|this, _, _, cx| {
                             this.close_mentions(cx);
                             this.settings_open = true;
@@ -657,7 +658,7 @@ impl MissiveApp {
                     .text_size(px(11.5))
                     .font_weight(FontWeight::BOLD)
                     .text_color(p.text_muted)
-                    .child("Réponses rapides"),
+                    .child(ts!("composer.snippets.title")),
             )
             .children(rows)
             .into_any_element(),
@@ -742,7 +743,7 @@ impl MissiveApp {
                         .text_size(px(11.5))
                         .font_weight(FontWeight::BOLD)
                         .text_color(p.text_muted)
-                        .child("Mentionner"),
+                        .child(ts!("composer.mentions.title")),
                 )
                 .children(rows)
                 .into_any_element(),
