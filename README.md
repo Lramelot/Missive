@@ -6,7 +6,8 @@ Unofficial native desktop client for Facebook Messenger, written in Rust (GPUI i
 [`gpui-kit`](https://github.com/longbridge/gpui-kit)) with a small Go process that talks to Meta,
 based on [mautrix-meta](https://github.com/mautrix/meta).
 
-The interface is in French only for now.
+The interface is available in English and French: it follows your system language, and you can
+change it in Settings.
 
 ![Missive, light theme](docs/images/clair.png)
 
@@ -26,8 +27,8 @@ The interface is in French only for now.
   archive, mute, block, presence and last active time.
 - **Beyond the official client**:
   - scheduled sending and reminders on a message;
-  - advanced search (`de:Hugo`, `dans:Coloc`, `a:photo`, `avant:mars 2025`, `après:hier`, the
-    French for from, in, has, before and after) and in-conversation search (Ctrl+F);
+  - advanced search (`from:Hugo`, `in:Roommates`, `has:photo`, `before:march 2025`,
+    `after:yesterday`) and in-conversation search (Ctrl+F);
   - private favourites, personal folders, quick replies with `/`;
   - keywords that break through mute, quiet hours, priority conversations;
   - discreet reading (no read receipt) and an option to hide "typing…";
@@ -55,8 +56,7 @@ password: it only keeps the session cookies, encrypted on your disk with Windows
   end-to-end encryption key store and downloaded media are not; they stay protected by your Windows
   account permissions.
 - Technical logs (`%LOCALAPPDATA%\Missive\logs`) contain no message text, names or cookies.
-  "Paramètres → Copier le diagnostic" (Settings → Copy diagnostics) lets you share them to report a
-  bug.
+  "Settings → Copy diagnostics" lets you share them to report a bug.
 - No telemetry.
 
 ## Build from source

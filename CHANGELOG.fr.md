@@ -8,6 +8,16 @@ Les changements notables de Missive sont listés ici. Les versions suivent le
 
 ## [Non publié]
 
+## [0.2.0] - 2026-11-18
+
+### Ajouté
+
+- L'interface existe en anglais et en français. Elle suit la langue du système, et un réglage
+  « Langue » la change sans redémarrer.
+- La recherche accepte les mots-clés anglais (`from:`, `in:`, `has:`, `before:`, `after:`) en plus
+  des français, dans les deux langues.
+- Les exports de conversation et les messages d'erreur du bridge suivent la langue de l'app.
+
 ### Corrigé
 
 - Les messages reçus pendant la mise en veille de l'ordinateur apparaissent dans la conversation
@@ -60,5 +70,6 @@ Première version publique.
   haut pendant que leur contenu défile.
 - Ouvrir la fenêtre détachée ne fait plus planter l'app.
 
-[Non publié]: https://github.com/Lramelot/Missive/compare/v0.1.18...HEAD
+[Non publié]: https://github.com/Lramelot/Missive/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/Lramelot/Missive/compare/v0.1.18...v0.2.0
 [0.1.18]: https://github.com/Lramelot/Missive/releases/tag/v0.1.18

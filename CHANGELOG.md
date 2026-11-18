@@ -7,6 +7,16 @@ the format is based on [Keep a Changelog](https://keepachangelog.com).
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-11-18
+
+### Added
+
+- The interface is available in English and French. It follows the system language, and a
+  Language setting changes it without a restart.
+- Search accepts English keywords (`from:`, `in:`, `has:`, `before:`, `after:`) alongside the
+  French ones, in both languages.
+- Conversation exports and bridge error messages follow the app's language.
+
 ### Fixed
 
 - Messages received while the computer was asleep now appear in the open conversation, not only in
@@ -56,5 +66,6 @@ First public release.
   scrolls.
 - Opening the detached window no longer crashes the app.
 
-[Unreleased]: https://github.com/Lramelot/Missive/compare/v0.1.18...HEAD
+[Unreleased]: https://github.com/Lramelot/Missive/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/Lramelot/Missive/compare/v0.1.18...v0.2.0
 [0.1.18]: https://github.com/Lramelot/Missive/releases/tag/v0.1.18

@@ -6,6 +6,9 @@ Client de bureau natif et non officiel pour Facebook Messenger, écrit en Rust (
 [`gpui-kit`](https://github.com/longbridge/gpui-kit)) avec un petit processus Go qui parle à Meta,
 basé sur [mautrix-meta](https://github.com/mautrix/meta).
 
+L'interface existe en français et en anglais : elle suit la langue du système, et se change dans
+les Paramètres.
+
 ![Missive, thème clair](docs/images/clair.png)
 
 > **Avertissement.** Missive n'est ni affilié à Meta ni approuvé par Meta. Utiliser un client non
