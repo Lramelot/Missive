@@ -269,7 +269,7 @@ pub fn icon_resource(size: u32) -> Vec<u8> {
     dib(size, &render_rgba(size, size >= 32))
 }
 
-#[cfg(windows)]
+#[cfg(any(windows, test))]
 fn dib(size: u32, rgba: &[u8]) -> Vec<u8> {
     let mask_row = size.div_ceil(32) * 4;
     let mut out = Vec::new();
