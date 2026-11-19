@@ -8,6 +8,45 @@ Les changements notables de Missive sont listés ici. Les versions suivent le
 
 ## [Non publié]
 
+## [0.3.0] - 2026-11-19
+
+### Ajouté
+
+- Un message supprimé par son expéditeur reste lisible, avec « Ce message a été supprimé » au-dessus.
+  Un message qui arrive déjà supprimé affiche toujours « Message retiré ». Les exports suivent la
+  même règle.
+- Si le bridge s'arrête de façon inattendue, Missive le relance tout seul. Après plusieurs échecs, un
+  écran d'erreur propose un bouton Relancer et affiche la fin du journal technique.
+
+### Corrigé
+
+- Dans les conversations chiffrées de bout en bout en tête-à-tête, un message supprimé ou modifié par
+  l'autre personne est désormais réellement supprimé ou modifié. Avant, le changement était ignoré.
+- Un bridge qui ne répond plus ne bloque plus l'app : chaque requête a désormais un délai maximal, et
+  les images et avatars continuent de se charger après un incident.
+- Après une longue coupure réseau, Missive continue d'essayer de se reconnecter (au plus toutes les
+  5 minutes) au lieu d'abandonner après 10 essais. Les conversations chiffrées réessaient aussi.
+- Une valeur inconnue dans le fichier de réglages (après un retour à une version précédente, par
+  exemple) ne réinitialise plus tous les réglages : les réglages valides sont conservés et une copie
+  du fichier est gardée.
+- Les messages de la même milliseconde ne sont plus perdus au chargement de l'historique ancien.
+- L'indicateur « en train d'écrire… » disparaît de lui-même si l'événement de fin se perd.
+- Les fenêtres de conversation détachées se mettent à jour après une modification, une réaction ou
+  un vote.
+
+### Modifié
+
+- Les médias téléchargés, miniatures et photos de profil passent dans un cache local
+  (`%LOCALAPPDATA%\Missive\cache`), hors du profil itinérant. Miniatures et avatars sont plafonnés à
+  500 Mo.
+- Les dates et heures suivent la langue de l'interface. Le raccourci de recherche affiche ⌘K sur
+  macOS.
+- Les messages consécutifs d'une même personne sont regroupés quand moins de 5 minutes les séparent.
+- Le bandeau du message épinglé montre un aperçu du message.
+- Moins de travail disque et processeur : réglages et brouillons ne sont écrits que s'ils changent,
+  jamais sur le fil de l'interface ; les conversations que vous n'avez pas ouvertes depuis un moment
+  libèrent leurs anciens messages en mémoire.
+
 ## [0.2.0] - 2026-11-18
 
 ### Ajouté
@@ -70,6 +109,7 @@ Première version publique.
   haut pendant que leur contenu défile.
 - Ouvrir la fenêtre détachée ne fait plus planter l'app.
 
-[Non publié]: https://github.com/Lramelot/Missive/compare/v0.2.0...HEAD
+[Non publié]: https://github.com/Lramelot/Missive/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/Lramelot/Missive/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/Lramelot/Missive/compare/v0.1.18...v0.2.0
 [0.1.18]: https://github.com/Lramelot/Missive/releases/tag/v0.1.18

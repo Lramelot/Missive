@@ -7,6 +7,41 @@ the format is based on [Keep a Changelog](https://keepachangelog.com).
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-11-19
+
+### Added
+
+- A message deleted by its sender stays readable, with "This message was deleted" above it. A message
+  that arrives already deleted still shows "Message removed". Exports follow the same rule.
+- If the bridge stops unexpectedly, Missive restarts it on its own. After repeated failures, an
+  error screen offers a Retry button and shows the end of the technical log.
+
+### Fixed
+
+- In end-to-end encrypted one-to-one conversations, a message deleted or edited by the other person
+  is now actually deleted or edited. Before, the change was ignored.
+- A bridge that stopped answering no longer blocks the app: every request now has a time limit, and
+  images and avatars keep loading after an incident.
+- After a long network outage, Missive keeps trying to reconnect (up to every 5 minutes) instead of
+  giving up after 10 attempts. Encrypted conversations also keep retrying.
+- An unknown value in the settings file (after going back to an older version, for example) no
+  longer resets every setting: valid settings are kept, and a copy of the file is saved.
+- Messages sharing the same millisecond are no longer lost when loading older history.
+- The "typing…" indicator disappears on its own if the end event gets lost.
+- Detached conversation windows update after an edit, a reaction or a poll vote.
+
+### Changed
+
+- Downloaded media, thumbnails and profile pictures move to a local cache
+  (`%LOCALAPPDATA%\Missive\cache`), outside the roaming profile. Thumbnails and avatars are capped at
+  500 MB.
+- Dates and times follow the interface language. The search shortcut shows ⌘K on macOS.
+- Consecutive messages from the same person are grouped when they are less than 5 minutes apart.
+- The pinned message bar shows a preview of the pinned message.
+- Less disk and CPU work: settings and drafts are written only when they change and never on the
+  interface thread; conversations you have not opened in a while release their old messages from
+  memory.
+
 ## [0.2.0] - 2026-11-18
 
 ### Added
@@ -66,6 +101,7 @@ First public release.
   scrolls.
 - Opening the detached window no longer crashes the app.
 
-[Unreleased]: https://github.com/Lramelot/Missive/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/Lramelot/Missive/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/Lramelot/Missive/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/Lramelot/Missive/compare/v0.1.18...v0.2.0
 [0.1.18]: https://github.com/Lramelot/Missive/releases/tag/v0.1.18
