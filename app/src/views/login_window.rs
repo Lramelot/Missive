@@ -11,6 +11,7 @@ const LOGIN_URL: &str = "https://www.messenger.com/login/";
 const COOKIE_URL: &str = "https://www.messenger.com/";
 const REQUIRED: [&str; 3] = ["c_user", "xs", "datr"];
 const POLL: Duration = Duration::from_millis(800);
+#[cfg(windows)]
 const CLEAR_TIMEOUT: Duration = Duration::from_secs(8);
 
 pub struct LoginWindow {

@@ -1,5 +1,6 @@
 use std::sync::mpsc::Sender;
 
+#[cfg(windows)]
 pub const APP_ID: &str = "Missive.Desktop";
 
 pub const REPLY_SEPARATOR: char = '\u{1f}';
@@ -119,8 +120,6 @@ pub fn unregister() {
     let _ = RegKey::predef(HKEY_CURRENT_USER).delete_subkey_all(path);
 }
 
-#[cfg(not(windows))]
-pub fn unregister() {}
 
 #[cfg(windows)]
 fn reply_text(args: &windows::UI::Notifications::ToastActivatedEventArgs) -> Option<String> {

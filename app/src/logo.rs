@@ -252,20 +252,24 @@ pub fn tray_rgba(size: u32, unread: u32) -> Vec<u8> {
     })
 }
 
+#[cfg(any(windows, test))]
 pub fn overlay_rgba(size: u32, count: u32) -> Vec<u8> {
     let s = size as f32;
     let badge = Badge::new(s / 2.0, s / 2.0, s / 2.0 - 0.5, 0.0, count);
     rasterize(size, |x, y| badge.sample(x, y).flatten())
 }
 
+#[cfg(windows)]
 pub fn overlay_resource(size: u32, count: u32) -> Vec<u8> {
     dib(size, &overlay_rgba(size, count))
 }
 
+#[cfg(windows)]
 pub fn icon_resource(size: u32) -> Vec<u8> {
     dib(size, &render_rgba(size, size >= 32))
 }
 
+#[cfg(windows)]
 fn dib(size: u32, rgba: &[u8]) -> Vec<u8> {
     let mask_row = size.div_ceil(32) * 4;
     let mut out = Vec::new();
