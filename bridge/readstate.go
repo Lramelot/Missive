@@ -16,6 +16,7 @@ import (
 
 const (
 	maxReadReceiptIDs = 100
+	maxReadSentIDs    = 5000
 	afterSendReadWait = 5 * time.Second
 )
 
@@ -169,7 +170,7 @@ func (b *MetaBackend) markReadE2EE(ctx context.Context, rec threadRec) error {
 			continue
 		}
 		for _, id := range batch.ids {
-			b.readSent.Store(id, struct{}{})
+			b.markReadSent(id)
 		}
 	}
 	marked := len(plan.tasks) > 0
@@ -203,7 +204,7 @@ func (b *MetaBackend) markReadAfterSend(ctx context.Context, threadID string) {
 		return
 	}
 	b.queueAfterSend(threadID, func() {
-		ctx, cancel := context.WithTimeout(context.Background(), afterSendReadWait)
+		ctx, cancel := context.WithTimeout(b.lifeCtx(), afterSendReadWait)
 		defer cancel()
 		current, ok := b.store.Thread(threadID)
 		if !ok {
@@ -224,16 +225,46 @@ func (b *MetaBackend) queueAfterSend(threadID string, job func()) {
 	prev := b.afterSendTail[threadID]
 	b.afterSendTail[threadID] = done
 	b.afterSendMu.Unlock()
-	go func() {
+	goSafe(b.log, "after_send", func() {
+		defer func() {
+			close(done)
+			b.afterSendMu.Lock()
+			if b.afterSendTail[threadID] == done {
+				delete(b.afterSendTail, threadID)
+			}
+			b.afterSendMu.Unlock()
+		}()
 		if prev != nil {
 			<-prev
 		}
 		job()
-		close(done)
-		b.afterSendMu.Lock()
-		if b.afterSendTail[threadID] == done {
-			delete(b.afterSendTail, threadID)
-		}
-		b.afterSendMu.Unlock()
-	}()
+	})
+}
+
+func (b *MetaBackend) markReadSent(id string) {
+	if _, loaded := b.readSent.LoadOrStore(id, struct{}{}); loaded {
+		return
+	}
+	if b.readSentCount.Add(1) > maxReadSentIDs {
+		b.clearReadSent()
+		b.readSent.Store(id, struct{}{})
+		b.readSentCount.Add(1)
+	}
+}
+
+func (b *MetaBackend) clearReadSent() {
+	b.readSent.Range(func(key, _ any) bool {
+		b.readSent.Delete(key)
+		return true
+	})
+	b.readSentCount.Store(0)
+}
+
+func (b *MetaBackend) readSentSize() int {
+	n := 0
+	b.readSent.Range(func(_, _ any) bool {
+		n++
+		return true
+	})
+	return n
 }

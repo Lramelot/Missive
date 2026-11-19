@@ -46,7 +46,7 @@ func newDemoHarness(t *testing.T) *harness {
 	buf := &syncBuffer{}
 	log := zerolog.Nop()
 	out := NewOutput(buf, log)
-	demo := NewDemoBackend(t.TempDir(), out, log)
+	demo := NewDemoBackend(t.TempDir(), "", out, log)
 	disp := NewDispatcher(demo, out, log)
 	t.Cleanup(func() { disp.Shutdown(5 * time.Second) })
 	return &harness{t: t, out: buf, disp: disp, demo: demo}
@@ -446,5 +446,129 @@ func TestDemoIncomingTraffic(t *testing.T) {
 	}
 	if len(h.events(EventThreads)) != 1 {
 		t.Fatal("incoming message did not update its thread")
+	}
+}
+
+func TestDispatcherValidatesCommandParams(t *testing.T) {
+	h := newDemoHarness(t)
+	group := demoGroupID(1)
+	cases := []string{
+		`{"cmd":"edit_message","params":{"thread_id":"1","message_id":"m","text":"  "}}`,
+		`{"cmd":"unsend","params":{"thread_id":"1"}}`,
+		`{"cmd":"delete_for_me","params":{"message_id":"m"}}`,
+		`{"cmd":"forward","params":{"from_thread_id":"1","message_id":"m","to_thread_ids":[]}}`,
+		`{"cmd":"forward","params":{"from_thread_id":"1","message_id":"m","to_thread_ids":["1","2","3","4","5","6","7","8","9","10","11"]}}`,
+		`{"cmd":"send_voice","params":{"thread_id":"1"}}`,
+		`{"cmd":"send_voice","params":{"thread_id":"1","path":"x.wav","duration_ms":-1}}`,
+		fmt.Sprintf(`{"cmd":"create_poll","params":{"thread_id":%q,"question":"Q","options":["a"]}}`, group),
+		fmt.Sprintf(`{"cmd":"create_poll","params":{"thread_id":%q,"question":"Q","options":["a",""]}}`, group),
+		fmt.Sprintf(`{"cmd":"create_poll","params":{"thread_id":%q,"question":" ","options":["a","b"]}}`, group),
+		`{"cmd":"vote_poll","params":{"thread_id":"1"}}`,
+		`{"cmd":"search_users","params":{"query":""}}`,
+		`{"cmd":"open_thread","params":{}}`,
+		`{"cmd":"create_group","params":{"user_ids":["1"]}}`,
+		`{"cmd":"create_group","params":{"user_ids":["1","1"]}}`,
+		`{"cmd":"accept_request","params":{}}`,
+		`{"cmd":"mute","params":{"thread_id":"1"}}`,
+		`{"cmd":"mute","params":{"thread_id":"1","until_ms":5}}`,
+		`{"cmd":"mute","params":{"thread_id":"1","until_ms":-2}}`,
+		`{"cmd":"rename_thread","params":{"thread_id":"1"}}`,
+		`{"cmd":"set_thread_image","params":{"thread_id":"1"}}`,
+		`{"cmd":"add_participants","params":{"thread_id":"1","user_ids":[]}}`,
+		`{"cmd":"remove_participant","params":{"thread_id":"1"}}`,
+		`{"cmd":"leave_thread","params":{}}`,
+		`{"cmd":"set_admin","params":{"thread_id":"1","user_id":"2"}}`,
+		`{"cmd":"block_user","params":{"user_id":"2"}}`,
+	}
+	lines := make([]string, len(cases))
+	for i, c := range cases {
+		lines[i] = fmt.Sprintf(`{"id":%d,%s`, i+1, c[1:])
+	}
+	h.send(lines...)
+	for i := range cases {
+		if code := h.errCode(int64(i + 1)); code != CodeBadRequest {
+			t.Errorf("case %d (%s): expected bad_request, got %s", i, cases[i], code)
+		}
+	}
+	h.send(`{"id":100,"cmd":"edit_message","params":{"thread_id":"nope","message_id":"m","text":"x"}}`, `{"id":101,"cmd":"definitely_unknown"}`)
+	if h.errCode(100) != CodeNotFound || h.errCode(101) != CodeBadRequest {
+		t.Fatal("unknown thread must be not_found and unknown commands bad_request")
+	}
+}
+
+type laneBackend struct {
+	*DemoBackend
+	mu         sync.Mutex
+	order      []string
+	otherDone  chan struct{}
+	otherClose sync.Once
+}
+
+func (l *laneBackend) Send(ctx context.Context, threadID, text, replyToID, clientID string, mentions []Mention) (string, error) {
+	if text == "first" {
+		select {
+		case <-l.otherDone:
+		case <-ctx.Done():
+		}
+	}
+	l.mu.Lock()
+	l.order = append(l.order, threadID+":"+text)
+	l.mu.Unlock()
+	if text == "other" {
+		l.otherClose.Do(func() { close(l.otherDone) })
+	}
+	return text, nil
+}
+
+func TestSendsAreSerializedPerThread(t *testing.T) {
+	buf := &syncBuffer{}
+	out := NewOutput(buf, zerolog.Nop())
+	lb := &laneBackend{DemoBackend: NewDemoBackend(t.TempDir(), "", out, zerolog.Nop()), otherDone: make(chan struct{})}
+	disp := NewDispatcher(lb, out, zerolog.Nop())
+	disp.Run(strings.NewReader(strings.Join([]string{
+		`{"id":1,"cmd":"send","params":{"thread_id":"A","text":"first"}}`,
+		`{"id":2,"cmd":"send","params":{"thread_id":"A","text":"second"}}`,
+		`{"id":3,"cmd":"send","params":{"thread_id":"B","text":"other"}}`,
+		`{"id":4,"cmd":"send","params":{"thread_id":"A","text":"third"}}`,
+	}, "\n") + "\n"))
+	disp.Wait()
+	disp.Shutdown(time.Second)
+	got := strings.Join(lb.order, ",")
+	if !strings.HasPrefix(got, "B:other,") || !strings.HasSuffix(got, "A:first,A:second,A:third") {
+		t.Fatalf("unexpected order %s", got)
+	}
+}
+
+type forwardLaneBackend struct {
+	*DemoBackend
+	mu    sync.Mutex
+	order []string
+}
+
+func (l *forwardLaneBackend) Send(ctx context.Context, threadID, text, replyToID, clientID string, mentions []Mention) (string, error) {
+	time.Sleep(150 * time.Millisecond)
+	l.mu.Lock()
+	l.order = append(l.order, "send:"+threadID)
+	l.mu.Unlock()
+	return "s", nil
+}
+
+func (l *forwardLaneBackend) Forward(ctx context.Context, from, messageID string, to []string) ([]string, error) {
+	l.mu.Lock()
+	l.order = append(l.order, "forward:"+strings.Join(to, ","))
+	l.mu.Unlock()
+	return make([]string, len(to)), nil
+}
+
+func TestForwardIsSerializedWithSends(t *testing.T) {
+	buf := &syncBuffer{}
+	out := NewOutput(buf, zerolog.Nop())
+	lb := &forwardLaneBackend{DemoBackend: NewDemoBackend(t.TempDir(), "", out, zerolog.Nop())}
+	disp := NewDispatcher(lb, out, zerolog.Nop())
+	disp.Run(strings.NewReader(`{"id":1,"cmd":"send","params":{"thread_id":"B","text":"x"}}` + "\n" +
+		`{"id":2,"cmd":"forward","params":{"from_thread_id":"A","message_id":"m","to_thread_ids":["C","B"]}}` + "\n"))
+	disp.Wait()
+	if strings.Join(lb.order, " ") != "send:B forward:C,B" {
+		t.Fatalf("forward to B must wait for the pending send to B: %v", lb.order)
 	}
 }

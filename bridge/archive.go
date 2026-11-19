@@ -417,9 +417,6 @@ func writeExport(ctx context.Context, src archiveSource, rec threadRec, p Export
 		}
 		failures := 0
 		for _, msg := range messages {
-			if msg.Deleted {
-				continue
-			}
 			for _, att := range msg.Attachments {
 				if !slices.Contains(exportMediaKinds, att.Kind) {
 					continue
@@ -433,11 +430,15 @@ func writeExport(ctx context.Context, src archiveSource, rec threadRec, p Export
 				}
 				name, _, err := fetchArchiveMedia(ctx, src, mediaDir, msg, att, false)
 				if err != nil {
-					failures++
+					if !msg.Deleted {
+						failures++
+					}
 					result.MediaFailed++
 					continue
 				}
-				failures = 0
+				if !msg.Deleted {
+					failures = 0
+				}
 				files[mediaKey(msg.ID, att.ID)] = exportMediaDirName + "/" + name
 				result.Media++
 				emit(false, len(messages), result.Media)

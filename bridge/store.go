@@ -3,6 +3,7 @@ package main
 import (
 	"cmp"
 	"encoding/json"
+	"maps"
 	"os"
 	"path/filepath"
 	"slices"
@@ -15,6 +16,8 @@ import (
 )
 
 const maxPersistedMessagesPerThread = 300
+
+var writeStoreFile = writeSecretFile
 
 type threadRec struct {
 	ID              string          `json:"id"`
@@ -68,7 +71,10 @@ type mediaRec struct {
 	Path            string `json:"path,omitempty"`
 }
 
+const storeSnapshotVersion = 1
+
 type storeSnapshot struct {
+	Version       int                                     `json:"v,omitempty"`
 	SelfID        string                                  `json:"self_id"`
 	Threads       map[string]*threadRec                   `json:"threads"`
 	Messages      map[string][]Message                    `json:"messages"`
@@ -116,7 +122,8 @@ type Store struct {
 	pollIndex      map[string]string
 	presence       map[string]presenceRec
 	selfName       string
-	dirty          bool
+	gen            uint64
+	savedGen       uint64
 }
 
 func (s *Store) SetReadReceipt(threadID, userID string, readMS int64) bool {
@@ -132,7 +139,7 @@ func (s *Store) SetReadReceipt(threadID, userID string, readMS int64) bool {
 		s.receipts[threadID] = make(map[string]int64)
 	}
 	s.receipts[threadID][userID] = readMS
-	s.dirty = true
+	s.gen++
 	return true
 }
 
@@ -289,7 +296,7 @@ func (s *Store) SetNickname(threadID, contactID, nickname string) bool {
 		}
 		s.nicknames[threadID][contactID] = nickname
 	}
-	s.dirty = true
+	s.gen++
 	return true
 }
 
@@ -310,7 +317,7 @@ func (s *Store) SetReaction(messageID, actorID, emoji string, timestampMS int64)
 			s.reactionTimes[messageID] = make(map[string]int64)
 		}
 		s.reactionTimes[messageID][actorID] = timestampMS
-		s.dirty = true
+		s.gen++
 		return true
 	}
 	if emoji == "" {
@@ -337,7 +344,7 @@ func (s *Store) SetReaction(messageID, actorID, emoji string, timestampMS int64)
 			delete(s.reactionTimes[messageID], actorID)
 		}
 	}
-	s.dirty = true
+	s.gen++
 	return true
 }
 
@@ -379,7 +386,7 @@ func (s *Store) SetReactionV2(messageID, reactionID string, agg *reactionAggrega
 		}
 		s.reactionsV2[messageID][reactionID] = *agg
 	}
-	s.dirty = true
+	s.gen++
 	return true
 }
 
@@ -469,7 +476,7 @@ func (s *Store) PutMedia(messageID, attachmentID string, rec mediaRec) {
 		rec.Path = old.Path
 	}
 	s.media[key] = &rec
-	s.dirty = true
+	s.gen++
 }
 
 func (s *Store) Media(messageID, attachmentID string) (mediaRec, bool) {
@@ -494,7 +501,7 @@ func (s *Store) SetMediaPath(messageID, attachmentID, path, mimeType string) {
 	if mimeType != "" {
 		rec.MimeType = mimeType
 	}
-	s.dirty = true
+	s.gen++
 }
 
 func (s *Store) MessageInThread(threadID, messageID string) (Message, bool) {
@@ -539,7 +546,7 @@ func (s *Store) Clear() {
 	defer s.mu.Unlock()
 	s.selfID = ""
 	s.reset()
-	s.dirty = true
+	s.gen++
 }
 
 func (s *Store) SetSelfID(id string) {
@@ -547,7 +554,7 @@ func (s *Store) SetSelfID(id string) {
 	defer s.mu.Unlock()
 	if s.selfID != id {
 		s.selfID = id
-		s.dirty = true
+		s.gen++
 	}
 }
 
@@ -684,7 +691,7 @@ func (s *Store) view(rec *threadRec) Thread {
 		ReadReceipts:   s.readReceiptsLocked(rec.ID),
 		Participants:   s.participantsLocked(rec),
 	}
-	s.applyV11View(rec, &view)
+	s.applyThreadSettings(rec, &view)
 	if !rec.IsGroup && peer != "" {
 		view.PeerOnline, view.PeerLastActiveMS = s.presenceLocked(peer)
 	}
@@ -820,7 +827,7 @@ func (s *Store) UpdateExistingThread(id string, fn func(rec *threadRec)) bool {
 		return false
 	}
 	fn(rec)
-	s.dirty = true
+	s.gen++
 	return true
 }
 
@@ -833,7 +840,7 @@ func (s *Store) UpdateThread(id string, fn func(rec *threadRec)) {
 		s.threads[id] = rec
 	}
 	fn(rec)
-	s.dirty = true
+	s.gen++
 }
 
 func (s *Store) RemoveThread(id string) bool {
@@ -848,7 +855,7 @@ func (s *Store) RemoveThread(id string) bool {
 	}
 	delete(s.messages, id)
 	delete(s.hasMoreBefore, id)
-	s.dirty = true
+	s.gen++
 	return true
 }
 
@@ -886,7 +893,7 @@ func (s *Store) SetContact(id, name, firstName, avatar string) bool {
 		changed = true
 	}
 	if changed {
-		s.dirty = true
+		s.gen++
 	}
 	return changed
 }
@@ -909,6 +916,34 @@ func (s *Store) Contact(id string) (contactRec, bool) {
 	return contactRec{}, false
 }
 
+func keepUnsentContent(prev, msg Message) Message {
+	if !prev.Deleted && !msg.Deleted {
+		return msg
+	}
+	msg.Deleted = true
+	if msg.Text == "" && len(msg.Attachments) == 0 {
+		msg.Text = prev.Text
+		msg.Attachments = prev.Attachments
+		if len(msg.Mentions) == 0 {
+			msg.Mentions = prev.Mentions
+		}
+	}
+	if msg.Attachments == nil {
+		msg.Attachments = []Attachment{}
+	}
+	return msg
+}
+
+func (s *Store) MarkUnsent(messageID string) (Message, bool) {
+	return s.UpdateMessage(messageID, func(m *Message) bool {
+		if m.Deleted {
+			return false
+		}
+		m.Deleted = true
+		return true
+	})
+}
+
 func (s *Store) PutMessage(msg Message) (prev Message, existed bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -916,6 +951,7 @@ func (s *Store) PutMessage(msg Message) (prev Message, existed bool) {
 		if old, ok := s.messages[oldThread][msg.ID]; ok {
 			prev = *old
 			existed = true
+			msg = keepUnsentContent(prev, msg)
 			if oldThread != msg.ThreadID {
 				delete(s.messages[oldThread], msg.ID)
 			}
@@ -932,7 +968,7 @@ func (s *Store) PutMessage(msg Message) (prev Message, existed bool) {
 	stored.Poll = nil
 	msgs[msg.ID] = &stored
 	s.msgThread[msg.ID] = msg.ThreadID
-	s.dirty = true
+	s.gen++
 	return
 }
 
@@ -964,7 +1000,7 @@ func (s *Store) UpdateMessage(msgID string, fn func(msg *Message) bool) (Message
 	if !fn(msg) {
 		return *msg, false
 	}
-	s.dirty = true
+	s.gen++
 	return *msg, true
 }
 
@@ -1074,7 +1110,7 @@ func (s *Store) SetHasMoreBefore(threadID string, more bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.hasMoreBefore[threadID] = more
-	s.dirty = true
+	s.gen++
 }
 
 func (s *Store) HasMoreBefore(threadID string) (more, known bool) {
@@ -1093,7 +1129,7 @@ func (s *Store) SetHybrid(fbKey, waKey int64) bool {
 		return false
 	}
 	s.hybrid[fbKey] = waKey
-	s.dirty = true
+	s.gen++
 	return true
 }
 
@@ -1128,81 +1164,184 @@ func (s *Store) FBKeyFor(waKey int64) (int64, bool) {
 	return s.hybridKeyLocked(waKey, false)
 }
 
-func (s *Store) Save(path string) error {
-	s.saveMu.Lock()
-	defer s.saveMu.Unlock()
-	s.mu.Lock()
-	if !s.dirty {
-		s.mu.Unlock()
-		return nil
+func cloneNested[K comparable, K2 comparable, V any](m map[K]map[K2]V) map[K]map[K2]V {
+	out := make(map[K]map[K2]V, len(m))
+	for k, inner := range m {
+		out[k] = maps.Clone(inner)
 	}
-	hasMore := make(map[string]bool, len(s.hasMoreBefore))
-	for id, more := range s.hasMoreBefore {
-		hasMore[id] = more
-	}
+	return out
+}
+
+func (s *Store) snapshotLocked() storeSnapshot {
 	snap := storeSnapshot{
+		Version:       storeSnapshotVersion,
 		SelfID:        s.selfID,
-		Threads:       s.threads,
+		Threads:       make(map[string]*threadRec, len(s.threads)),
 		Messages:      make(map[string][]Message, len(s.messages)),
-		Contacts:      s.contacts,
-		HasMoreBefore: hasMore,
-		Hybrid:        s.hybrid,
+		Contacts:      make(map[string]*contactRec, len(s.contacts)),
+		HasMoreBefore: maps.Clone(s.hasMoreBefore),
+		Hybrid:        maps.Clone(s.hybrid),
 		Media:         make(map[string]*mediaRec, len(s.media)),
-		Nicknames:     s.nicknames,
-		Receipts:      s.receipts,
-		Deliveries:    s.deliveries,
-		Themes:        s.themeGradients,
-		Polls:         s.polls,
+		Nicknames:     cloneNested(s.nicknames),
+		Receipts:      cloneNested(s.receipts),
+		Deliveries:    cloneNested(s.deliveries),
+		Themes:        cloneNested(s.themeGradients),
+		Polls:         make(map[string]*pollRec, len(s.polls)),
 		Reactions:     make(map[string]map[string]string),
 		ReactionsV2:   make(map[string]map[string]reactionAggregate),
 		ReactionTimes: make(map[string]map[string]int64),
 	}
+	for id, rec := range s.threads {
+		c := *rec
+		c.Members = maps.Clone(rec.Members)
+		c.Admins = maps.Clone(rec.Admins)
+		c.Pinned = slices.Clone(rec.Pinned)
+		snap.Threads[id] = &c
+	}
+	for id, c := range s.contacts {
+		copied := *c
+		snap.Contacts[id] = &copied
+	}
+	for id, p := range s.polls {
+		c := *p
+		c.Options = slices.Clone(p.Options)
+		c.Votes = maps.Clone(p.Votes)
+		c.VoteTimes = maps.Clone(p.VoteTimes)
+		snap.Polls[id] = &c
+	}
 	for threadID := range s.messages {
 		sorted := s.sortedMessages(threadID)
 		if len(sorted) > maxPersistedMessagesPerThread {
-			start := len(sorted) - maxPersistedMessagesPerThread
-			for start > 0 && sorted[start-1].TimestampMS == sorted[start].TimestampMS {
-				start--
-			}
-			sorted = sorted[start:]
-			hasMore[threadID] = true
+			sorted = sorted[keepFrom(sorted, maxPersistedMessagesPerThread):]
+			snap.HasMoreBefore[threadID] = true
 		}
 		list := make([]Message, len(sorted))
 		for i, msg := range sorted {
 			list[i] = *msg
 			list[i].Reactions = nil
+			list[i].Attachments = slices.Clone(msg.Attachments)
+			list[i].Mentions = slices.Clone(msg.Mentions)
 			if r := s.reactions[msg.ID]; len(r) > 0 {
-				snap.Reactions[msg.ID] = r
+				snap.Reactions[msg.ID] = maps.Clone(r)
 			}
 			if r := s.reactionTimes[msg.ID]; len(r) > 0 {
-				snap.ReactionTimes[msg.ID] = r
+				snap.ReactionTimes[msg.ID] = maps.Clone(r)
 			}
 			if r := s.reactionsV2[msg.ID]; len(r) > 0 {
-				snap.ReactionsV2[msg.ID] = r
+				snap.ReactionsV2[msg.ID] = maps.Clone(r)
 			}
 			for _, att := range msg.Attachments {
 				key := mediaKey(msg.ID, att.ID)
 				if rec, ok := s.media[key]; ok {
-					snap.Media[key] = rec
+					copied := *rec
+					snap.Media[key] = &copied
 				}
 			}
 		}
 		snap.Messages[threadID] = list
 	}
-	data, err := json.Marshal(&snap)
-	if err == nil {
-		s.dirty = false
+	return snap
+}
+
+func keepFrom(sorted []*Message, keep int) int {
+	start := len(sorted) - keep
+	for start > 0 && sorted[start-1].TimestampMS == sorted[start].TimestampMS {
+		start--
 	}
-	s.mu.Unlock()
+	return start
+}
+
+func (s *Store) Save(path string) error {
+	s.saveMu.Lock()
+	defer s.saveMu.Unlock()
+	s.mu.RLock()
+	gen := s.gen
+	if gen == s.savedGen {
+		s.mu.RUnlock()
+		return nil
+	}
+	snap := s.snapshotLocked()
+	s.mu.RUnlock()
+	data, err := json.Marshal(&snap)
 	if err != nil {
 		return err
 	}
-	if err = writeSecretFile(path, data); err != nil {
-		s.mu.Lock()
-		s.dirty = true
-		s.mu.Unlock()
+	if err = writeStoreFile(path, data); err != nil {
+		return err
 	}
-	return err
+	s.mu.Lock()
+	s.savedGen = gen
+	s.mu.Unlock()
+	return nil
+}
+
+func (s *Store) Generation() uint64 {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.gen
+}
+
+func (s *Store) TrimThread(threadID string, keep int, retained map[string]bool) int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	sorted := s.sortedMessages(threadID)
+	if len(sorted) <= keep {
+		return 0
+	}
+	dropped := sorted[:keepFrom(sorted, keep)]
+	for i, msg := range dropped {
+		if retained[msg.ID] {
+			dropped = dropped[:i]
+			break
+		}
+	}
+	for len(dropped) > 0 && dropped[len(dropped)-1].TimestampMS == sorted[len(dropped)].TimestampMS {
+		dropped = dropped[:len(dropped)-1]
+	}
+	for _, msg := range dropped {
+		delete(s.messages[threadID], msg.ID)
+		delete(s.msgThread, msg.ID)
+		delete(s.reactions, msg.ID)
+		delete(s.reactionsV2, msg.ID)
+		delete(s.reactionTimes, msg.ID)
+		for _, att := range msg.Attachments {
+			delete(s.media, mediaKey(msg.ID, att.ID))
+		}
+	}
+	if len(dropped) > 0 {
+		s.hasMoreBefore[threadID] = true
+		s.gen++
+	}
+	return len(dropped)
+}
+
+func (s *Store) RebaseMediaPaths(from, to string) int {
+	from, to = filepath.Clean(from), filepath.Clean(to)
+	if from == to {
+		return 0
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	moved := 0
+	for _, rec := range s.media {
+		if rec.Path == "" {
+			continue
+		}
+		rel, err := filepath.Rel(from, rec.Path)
+		if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+			continue
+		}
+		target := filepath.Join(to, rel)
+		if fileExists(rec.Path) || !fileExists(target) {
+			continue
+		}
+		rec.Path = target
+		moved++
+	}
+	if moved > 0 {
+		s.gen++
+	}
+	return moved
 }
 
 func (s *Store) Load(path string) error {
@@ -1299,7 +1438,8 @@ func (s *Store) Load(path string) error {
 			s.reactionTimes[msgID] = r
 		}
 	}
-	s.dirty = false
+	s.gen++
+	s.savedGen = s.gen
 	return nil
 }
 

@@ -515,12 +515,9 @@ impl MissiveApp {
                 id: "local0".into(),
                 kind: "audio".into(),
                 duration_ms: Some(recorded.duration_ms),
-                mime_type: Some("audio/wav".into()),
-                voice: true,
                 waveform: recorded.waveform.clone(),
                 ..Attachment::default()
             }],
-            reply_to_id: reply_to,
             reply_to: reply_preview,
             ..Message::default()
         };

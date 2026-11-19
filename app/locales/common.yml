@@ -59,3 +59,22 @@ common:
     dec:
       en: Dec
       fr: déc.
+  bridge:
+    restart:
+      en: "Restart"
+      fr: "Relancer"
+    restarting:
+      en: "The Messenger bridge stopped, restarting…"
+      fr: "Le bridge Messenger s'est arrêté, redémarrage…"
+    gave_up:
+      en: "It stopped 5 times in 5 minutes, so Missive no longer restarts it automatically."
+      fr: "Il s'est arrêté 5 fois en 5 minutes : Missive ne le relance plus automatiquement."
+    exit_code:
+      en: "Exit code: %{code}"
+      fr: "Code de sortie : %{code}"
+    exit_unknown:
+      en: "Exit code unknown."
+      fr: "Code de sortie inconnu."
+    recent_output:
+      en: "Last lines written by the bridge:"
+      fr: "Dernières lignes écrites par le bridge :"

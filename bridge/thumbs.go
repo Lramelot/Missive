@@ -206,7 +206,7 @@ func thumbnailable(kind string) bool {
 }
 
 func (b *MetaBackend) thumbFromURL(ctx context.Context, path, rawURL string) (MediaResult, error) {
-	f, err := newMediaTemp(b.dataDir)
+	f, err := newMediaTemp(b.cacheDir)
 	if err != nil {
 		return MediaResult{}, err
 	}
@@ -225,7 +225,7 @@ func (b *MetaBackend) thumbFromURL(ctx context.Context, path, rawURL string) (Me
 }
 
 func (b *MetaBackend) mediaThumb(ctx context.Context, messageID string, att Attachment) (MediaResult, error) {
-	path := thumbPath(b.dataDir, messageID, att.ID)
+	path := thumbPath(b.cacheDir, messageID, att.ID)
 	unlock := b.lockMediaKey("thumb|" + mediaKey(messageID, att.ID))
 	defer unlock()
 	if res, ok := readThumbResult(path); ok {

@@ -10,7 +10,7 @@ use crate::{
     style::{Palette, with_alpha},
 };
 
-const RUN_GAP_MS: i64 = 3 * 60 * 1000;
+const RUN_GAP_MS: i64 = 5 * 60 * 1000;
 const SEPARATOR_GAP_MS: i64 = 60 * 60 * 1000;
 pub(super) const BUBBLE_RADIUS: f32 = 18.;
 pub(super) const BUBBLE_TAIL: f32 = 6.;
@@ -273,6 +273,18 @@ fn reply_quote(
         .into_any_element()
 }
 
+fn deleted_label(outgoing: bool, p: &Palette) -> impl IntoElement {
+    h_flex()
+        .gap_1()
+        .px_1()
+        .when(outgoing, |el| el.justify_end())
+        .text_size(px(11.5))
+        .italic()
+        .text_color(p.text_faint)
+        .child(Icon::new(IconName::Trash).size(px(12.)))
+        .child(ts!("message.deleted_label"))
+}
+
 fn forwarded_label(p: &Palette) -> impl IntoElement {
     h_flex()
         .gap_1()
@@ -316,6 +328,7 @@ struct RowContext {
     out_fg: Hsla,
     scale: f32,
     compact: bool,
+    find: Option<FindHighlight>,
 }
 
 impl MissiveApp {
@@ -352,15 +365,6 @@ impl MissiveApp {
             !same_run(message, next) || next.timestamp_ms - message.timestamp_ms > SEPARATOR_GAP_MS
         });
         let (out_bg, out_fg) = bubble_colors(thread, &p);
-        let row = RowContext {
-            index,
-            outgoing: message.is_outgoing,
-            first_in_run,
-            out_bg,
-            out_fg,
-            scale,
-            compact,
-        };
         let find = self.find_mark(message).map(|mark| FindHighlight {
             query: mark.query.to_string(),
             style: if mark.current {
@@ -377,6 +381,16 @@ impl MissiveApp {
                 }
             },
         });
+        let row = RowContext {
+            index,
+            outgoing: message.is_outgoing,
+            first_in_run,
+            out_bg,
+            out_fg,
+            scale,
+            compact,
+            find,
+        };
         let waiting = self.find.offline.is_waiting(&message.id);
         let show_name = thread.is_group && !row.outgoing && first_in_run;
         let (avatar_name, avatar_url) = if thread.is_group {
@@ -413,10 +427,12 @@ impl MissiveApp {
         let actionable = !message.deleted;
         let flashing = self.message_ops.is_flashing(&message.id);
         let editing = self.message_ops.is_editing(&message.id);
-        let is_last_outgoing = message.is_outgoing
-            && messages.iter().rposition(|m| m.is_outgoing && !m.system) == Some(index);
+        let is_last_outgoing = is_last_outgoing(messages, index);
 
-        let quoted = message.reply_to.as_ref().filter(|_| !message.deleted);
+        let quoted = message
+            .reply_to
+            .as_ref()
+            .filter(|_| !message.removed_without_content());
         let content = v_flex()
             .max_w(px(BUBBLE_MAX_WIDTH))
             .min_w_0()
@@ -425,10 +441,13 @@ impl MissiveApp {
             .when(!row.outgoing, |el| el.items_start())
             .when(editing, |el| el.opacity(0.55))
             .when(waiting && !editing, |el| el.opacity(0.6))
-            .when(message.forwarded && !message.deleted, |el| {
+            .when(message.deleted_with_content(), |el| {
+                el.child(deleted_label(row.outgoing, &p))
+            })
+            .when(message.forwarded && !message.removed_without_content(), |el| {
                 el.child(forwarded_label(&p))
             })
-            .children(self.render_message_body(message, &row, quoted, find.as_ref(), view, &p, cx))
+            .children(self.render_message_body(message, &row, quoted, view, &p, cx))
             .when(has_reactions, |el| {
                 el.child(reaction_pill(message, row.outgoing, view, &p))
             });
@@ -749,7 +768,6 @@ impl MissiveApp {
         message: &Message,
         row: &RowContext,
         quoted: Option<&ReplyPreview>,
-        find: Option<&FindHighlight>,
         view: &Entity<Self>,
         p: &Palette,
         cx: &App,
@@ -772,7 +790,7 @@ impl MissiveApp {
             )
         };
 
-        if message.deleted {
+        if message.removed_without_content() {
             parts.push(
                 bubble(row)
                     .border_1()
@@ -791,7 +809,7 @@ impl MissiveApp {
         }
 
         for attachment in &message.attachments {
-            parts.push(self.render_attachment(message, attachment, row, find, view, p, cx));
+            parts.push(self.render_attachment(message, attachment, row, view, p, cx));
         }
 
         let text_is_card_link = message.attachments.iter().any(|a| {
@@ -839,7 +857,7 @@ impl MissiveApp {
                         link,
                         &message.mentions,
                         mention,
-                        find,
+                        row.find.as_ref(),
                     ))
                     .when(message.edited, |el| {
                         el.child(
@@ -899,11 +917,11 @@ impl MissiveApp {
         message: &Message,
         attachment: &Attachment,
         row: &RowContext,
-        find: Option<&FindHighlight>,
         view: &Entity<Self>,
         p: &Palette,
         cx: &App,
     ) -> AnyElement {
+        let find = row.find.as_ref();
         match attachment.kind.as_str() {
             "image" | "sticker" => self.render_image(message, attachment, view, p),
             "video" => self.render_video(message, attachment, view, p),
@@ -1109,7 +1127,7 @@ impl MissiveApp {
         p: &Palette,
     ) -> AnyElement {
         let total = poll.total_votes.max(1) as f32;
-        let votable = !message.id.starts_with("local-");
+        let votable = !message.deleted && !message.id.starts_with("local-");
         let hover_border = p.border_strong;
         let mine_fill = with_alpha(p.accent, if p.dark { 0.22 } else { 0.12 });
         let other_fill = with_alpha(p.text_faint, 0.15);
@@ -1984,7 +2002,7 @@ fn same_run(a: &Message, b: &Message) -> bool {
         && !b.system
         && a.is_outgoing == b.is_outgoing
         && a.sender_id == b.sender_id
-        && (b.timestamp_ms - a.timestamp_ms).abs() <= RUN_GAP_MS
+        && (b.timestamp_ms - a.timestamp_ms).abs() < RUN_GAP_MS
 }
 
 fn fit_image(width: Option<u32>, height: Option<u32>) -> (f32, f32) {
@@ -2023,10 +2041,40 @@ fn is_emoji_only(text: &str) -> bool {
         })
 }
 
+fn is_last_outgoing(messages: &[Message], index: usize) -> bool {
+    let counts = |m: &Message| m.is_outgoing && !m.system;
+    messages.get(index).is_some_and(counts) && !messages[index + 1..].iter().any(counts)
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{delivery_label, host_of, is_emoji_only, parse_hex_color, same_run, shorten_url};
+    use super::{
+        delivery_label, host_of, is_emoji_only, is_last_outgoing, parse_hex_color, same_run,
+        shorten_url,
+    };
     use crate::model::{Message, ReadReceipt};
+
+    #[::core::prelude::v1::test]
+    fn last_outgoing_is_found_without_scanning_older_rows() {
+        let row = |is_outgoing: bool, system: bool| Message {
+            is_outgoing,
+            system,
+            ..Message::default()
+        };
+        let messages = vec![
+            row(true, false),
+            row(false, false),
+            row(true, false),
+            row(true, true),
+            row(false, false),
+        ];
+        let found: Vec<usize> = (0..messages.len())
+            .filter(|index| is_last_outgoing(&messages, *index))
+            .collect();
+        assert_eq!(found, vec![2]);
+        assert!(!is_last_outgoing(&messages, 9));
+        assert!(!is_last_outgoing(&[], 0));
+    }
 
     fn receipt(read_ms: i64, delivered_ms: Option<i64>) -> ReadReceipt {
         ReadReceipt {
@@ -2106,6 +2154,26 @@ mod tests {
             ..b.clone()
         };
         assert!(!same_run(&a, &system));
+    }
+
+    #[::core::prelude::v1::test]
+    fn runs_group_messages_under_five_minutes_apart() {
+        let at = |id: &str, sender: &str, timestamp_ms: i64| Message {
+            id: id.into(),
+            sender_id: sender.into(),
+            timestamp_ms,
+            ..Message::default()
+        };
+        let first = at("a", "x", 0);
+        assert!(same_run(&first, &at("b", "x", 4 * 60 * 1000)));
+        assert!(same_run(&first, &at("c", "x", 5 * 60 * 1000 - 1)));
+        assert!(!same_run(&first, &at("d", "x", 5 * 60 * 1000)));
+        assert!(!same_run(&first, &at("e", "y", 1000)));
+        let outgoing = Message {
+            is_outgoing: true,
+            ..at("f", "x", 1000)
+        };
+        assert!(!same_run(&first, &outgoing));
     }
 
     #[::core::prelude::v1::test]

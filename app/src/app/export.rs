@@ -171,7 +171,7 @@ fn group_digits(value: i64) -> String {
     let separator = if crate::i18n::is_french() { '\u{a0}' } else { ',' };
     let mut out = String::new();
     for (index, c) in digits.chars().enumerate() {
-        if index > 0 && (digits.len() - index) % 3 == 0 {
+        if index > 0 && (digits.len() - index).is_multiple_of(3) {
             out.push(separator);
         }
         out.push(c);

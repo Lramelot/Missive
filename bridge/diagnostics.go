@@ -9,15 +9,16 @@ import (
 var bridgeVersion = "dev"
 
 type DiagnosticsResult struct {
-	Version          string   `json:"version"`
-	GoVersion        string   `json:"go_version"`
-	OS               string   `json:"os"`
-	Connected        bool     `json:"connected"`
-	E2EEReady        bool     `json:"e2ee_ready"`
-	Threads          int      `json:"threads"`
-	Messages         int      `json:"messages"`
-	DataDirSizeBytes int64    `json:"data_dir_size_bytes"`
-	LastErrors       []string `json:"last_errors"`
+	Version           string   `json:"version"`
+	GoVersion         string   `json:"go_version"`
+	OS                string   `json:"os"`
+	Connected         bool     `json:"connected"`
+	E2EEReady         bool     `json:"e2ee_ready"`
+	Threads           int      `json:"threads"`
+	Messages          int      `json:"messages"`
+	DataDirSizeBytes  int64    `json:"data_dir_size_bytes"`
+	CacheDirSizeBytes int64    `json:"cache_dir_size_bytes"`
+	LastErrors        []string `json:"last_errors"`
 }
 
 type diagnosticsState struct {
@@ -26,6 +27,7 @@ type diagnosticsState struct {
 	Threads   int
 	Messages  int
 	DataDir   string
+	CacheDir  string
 }
 
 type diagnosticsSource interface {
@@ -76,6 +78,9 @@ func (d *Dispatcher) diagnostics(ctx context.Context) (DiagnosticsResult, error)
 		if st.DataDir != "" {
 			res.DataDirSizeBytes = dirSize(st.DataDir)
 		}
+		if st.CacheDir != "" && st.CacheDir != st.DataDir {
+			res.CacheDirSizeBytes = dirSize(st.CacheDir)
+		}
 	} else if status, err := d.backend.Status(ctx); err == nil {
 		res.Connected = status.Connected
 	}
@@ -89,6 +94,7 @@ func (b *MetaBackend) diagnosticsState() diagnosticsState {
 		Threads:   b.store.ThreadCount(),
 		Messages:  b.store.TotalMessageCount(),
 		DataDir:   b.dataDir,
+		CacheDir:  b.cacheDir,
 	}
 	if cli := b.currentE2EE(); cli != nil {
 		st.E2EEReady = cli.IsConnected() && cli.IsLoggedIn()
@@ -107,6 +113,7 @@ func (d *DemoBackend) diagnosticsState() diagnosticsState {
 		Threads:   d.store.ThreadCount(),
 		Messages:  d.store.TotalMessageCount(),
 		DataDir:   d.dataDir,
+		CacheDir:  d.cacheDir,
 	}
 }
 

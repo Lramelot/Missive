@@ -33,6 +33,7 @@ type exportText struct {
 	forwardedTag    string
 	forwardedInline string
 	removed         string
+	deletedLabel    string
 	edited          string
 	poll            string
 	replyFallback   string
@@ -57,6 +58,7 @@ var frenchExportText = exportText{
 	forwardedTag:    "Transféré",
 	forwardedInline: "transféré",
 	removed:         "Message retiré",
+	deletedLabel:    "Ce message a été supprimé",
 	edited:          "modifié",
 	poll:            "Sondage : ",
 	replyFallback:   "Message",
@@ -81,6 +83,7 @@ var englishExportText = exportText{
 	forwardedTag:    "Forwarded",
 	forwardedInline: "forwarded",
 	removed:         "Message removed",
+	deletedLabel:    "This message was deleted",
 	edited:          "edited",
 	poll:            "Poll: ",
 	replyFallback:   "Message",
@@ -302,8 +305,11 @@ func writeHTMLBody(b *strings.Builder, doc exportDoc, msg Message) {
 		b.WriteString("<blockquote class=\"reply\"><span class=\"rs\">" + esc(cmpOr(msg.ReplyTo.SenderName, x.replyFallback)) + "</span>" + esc(quoted) + "</blockquote>")
 	}
 	if msg.Deleted {
-		b.WriteString("<p class=\"text deleted\">" + esc(x.removed) + "</p>")
-		return
+		if !msg.hasContent() {
+			b.WriteString("<p class=\"text deleted\">" + esc(x.removed) + "</p>")
+			return
+		}
+		b.WriteString("<div class=\"tag deleted\">" + esc(x.deletedLabel) + "</div>")
 	}
 	if msg.Text != "" {
 		b.WriteString("<p class=\"text\">" + esc(msg.Text) + "</p>")
@@ -447,8 +453,11 @@ func renderExportMarkdown(w io.Writer, doc exportDoc) error {
 			b.WriteString("\n")
 		}
 		if msg.Deleted {
-			b.WriteString("_" + x.removed + "_\n")
-			continue
+			if !msg.hasContent() {
+				b.WriteString("_" + x.removed + "_\n")
+				continue
+			}
+			b.WriteString("_" + x.deletedLabel + "_\n")
 		}
 		if msg.Text != "" {
 			b.WriteString(mdText(msg.Text) + "\n")

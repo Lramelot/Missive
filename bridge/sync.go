@@ -52,11 +52,11 @@ func (b *MetaBackend) syncThreads(ctx context.Context, client *messagix.Client, 
 		})
 		b.paginateE2EEThreads(ctx, client, maxE2EEThreadPages)
 	} else {
-		go func() {
+		goSafe(b.log, "stale_catch_up", func() {
 			if sleepCtx(ctx, staleCatchUpDelay) {
 				b.catchUpStaleThreads()
 			}
-		}()
+		})
 	}
 	if !b.shouldRunHeavySync(first) {
 		return
@@ -283,11 +283,12 @@ func (b *MetaBackend) ensureContact(id string) {
 		b.contactsRequested.Delete(id)
 		return
 	}
-	go func() {
-		ctx, cancel := context.WithTimeout(context.Background(), contactFetchTimeout)
+	life := b.lifeCtx()
+	goSafe(b.log, "fetch_contact", func() {
+		ctx, cancel := context.WithTimeout(life, contactFetchTimeout)
 		defer cancel()
 		b.fetchContacts(ctx, client, []string{id})
-	}()
+	})
 }
 
 func (b *MetaBackend) logThreadSummary(initial bool) {
@@ -296,8 +297,13 @@ func (b *MetaBackend) logThreadSummary(initial bool) {
 	for tt, n := range st.ByType {
 		byType[strconv.FormatInt(tt, 10)] = n
 	}
+	known, online := b.store.PresenceStats()
 	b.log.Info().
 		Bool("initial", initial).
+		Int("presence_known", known).
+		Int("presence_online", online).
+		Int64("presence_updates_ls", b.presenceLS.Load()).
+		Int64("presence_updates_e2ee", b.presenceE2EE.Load()).
 		Any("threads_by_type", byType).
 		Int("one_to_one", st.OneToOne).
 		Int("one_to_one_unnamed", st.OneToOneNoName).

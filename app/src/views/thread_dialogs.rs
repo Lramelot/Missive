@@ -650,8 +650,8 @@ impl MissiveApp {
 
         let rows: Vec<AnyElement> = candidates
             .iter()
-            .enumerate()
-            .map(|(_, user)| self.person_row(user, direct, dialog.is_selected(&user.id), p, cx))
+            
+            .map(|user| self.person_row(user, direct, dialog.is_selected(&user.id), p, cx))
             .collect();
 
         let status: Option<SharedString> = if dialog.searching && rows.is_empty() {

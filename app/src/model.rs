@@ -72,8 +72,6 @@ fn default_folder() -> String {
 #[derive(Clone, Debug, Default, Deserialize)]
 pub struct ThreadTheme {
     pub accent: String,
-    #[serde(default, deserialize_with = "nullable_vec")]
-    pub gradient: Vec<String>,
 }
 
 #[derive(Clone, Debug, Default, Deserialize)]
@@ -250,8 +248,6 @@ pub struct Message {
     #[serde(default, deserialize_with = "nullable_vec")]
     pub attachments: Vec<Attachment>,
     #[serde(default)]
-    pub reply_to_id: Option<String>,
-    #[serde(default)]
     pub reply_to: Option<ReplyPreview>,
     #[serde(default)]
     pub client_id: Option<String>,
@@ -269,6 +265,20 @@ pub struct Message {
     pub forwarded: bool,
     #[serde(default)]
     pub poll: Option<Poll>,
+}
+
+impl Message {
+    pub fn has_content(&self) -> bool {
+        !self.text.is_empty() || !self.attachments.is_empty() || self.poll.is_some()
+    }
+
+    pub fn deleted_with_content(&self) -> bool {
+        self.deleted && self.has_content()
+    }
+
+    pub fn removed_without_content(&self) -> bool {
+        self.deleted && !self.has_content()
+    }
 }
 
 #[derive(Clone, Debug, Default, Deserialize)]
@@ -293,13 +303,9 @@ pub struct Attachment {
     #[serde(default)]
     pub file_name: Option<String>,
     #[serde(default)]
-    pub mime_type: Option<String>,
-    #[serde(default)]
     pub width: Option<u32>,
     #[serde(default)]
     pub height: Option<u32>,
-    #[serde(default)]
-    pub voice: bool,
     #[serde(default)]
     pub gif: bool,
     #[serde(default, deserialize_with = "nullable_vec")]
@@ -313,8 +319,6 @@ pub struct Attachment {
 #[derive(Clone, Debug, Deserialize)]
 pub struct Status {
     pub logged_in: bool,
-    #[serde(default)]
-    pub connected: bool,
     #[serde(default)]
     pub user: Option<User>,
 }
@@ -387,5 +391,37 @@ mod tests {
         assert!(message.attachments.is_empty() && message.reactions.is_empty());
         let missing: Message = serde_json::from_str(r#"{"id":"m","thread_id":"t","timestamp_ms":1}"#).unwrap();
         assert!(missing.mentions.is_empty());
+    }
+
+    #[test]
+    fn deleted_messages_keep_their_content_flag() {
+        let kept = Message {
+            deleted: true,
+            text: "bonjour".into(),
+            ..Message::default()
+        };
+        assert!(kept.deleted_with_content() && !kept.removed_without_content());
+        let emptied = Message {
+            deleted: true,
+            ..Message::default()
+        };
+        assert!(emptied.removed_without_content() && !emptied.deleted_with_content());
+        let poll = Message {
+            deleted: true,
+            poll: Some(super::Poll::default()),
+            ..Message::default()
+        };
+        assert!(poll.deleted_with_content() && !poll.removed_without_content());
+        let attachment_only = Message {
+            deleted: true,
+            attachments: vec![super::Attachment::default()],
+            ..Message::default()
+        };
+        assert!(attachment_only.deleted_with_content() && !attachment_only.removed_without_content());
+        let live = Message {
+            text: "salut".into(),
+            ..Message::default()
+        };
+        assert!(!live.deleted_with_content() && !live.removed_without_content());
     }
 }

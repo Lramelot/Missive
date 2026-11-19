@@ -178,8 +178,7 @@ func TestCatchUpFetchesMessagesNewerThanCache(t *testing.T) {
 	if _, err := b.Messages(ctx, "5", 0, 1, true); err != nil {
 		t.Fatal(err)
 	}
-	time.Sleep(100 * time.Millisecond)
-	if calls.Load() != 1 {
+	if !idle() || calls.Load() != 1 {
 		t.Fatalf("an up-to-date cache must not trigger a fetch, got %d calls", calls.Load())
 	}
 
@@ -192,18 +191,32 @@ func TestCatchUpFetchesMessagesNewerThanCache(t *testing.T) {
 	if _, err := b.Messages(ctx, "5", 0, 1, true); err != nil {
 		t.Fatal(err)
 	}
-	time.Sleep(100 * time.Millisecond)
-	if calls.Load() != 2 {
+	if !idle() || calls.Load() != 2 {
 		t.Fatalf("activity without new messages must be fetched once, got %d calls", calls.Load())
 	}
 	if _, err := b.Messages(ctx, "5", 1_500_000, 1, true); err != nil {
 		t.Fatal(err)
 	}
-	time.Sleep(100 * time.Millisecond)
-	if calls.Load() != 2 {
+	if !idle() || calls.Load() != 2 {
 		t.Fatal("loading older pages must not trigger a catch-up")
 	}
 	if len(eventsOf(t, buf, EventBackfilled)) != 1 {
 		t.Fatal("a catch-up that finds nothing must not emit")
+	}
+}
+
+func TestCatchUpAndStaleMessagesAreHistory(t *testing.T) {
+	b, buf, _ := loggedInBackend(t)
+	now := time.Now()
+	b.lsCatchingUp.Store(true)
+	b.handleTable(&table.LSTable{LSInsertMessage: []*table.LSInsertMessage{{ThreadKey: 5, MessageId: "c1", TimestampMs: now.UnixMilli(), SenderId: 7}}}, modeLive)
+	b.lsCatchingUp.Store(false)
+	b.handleTable(&table.LSTable{LSInsertMessage: []*table.LSInsertMessage{{ThreadKey: 5, MessageId: "c2", TimestampMs: now.Add(-5 * time.Minute).UnixMilli(), SenderId: 7}}}, modeLive)
+	if n := len(eventsOf(t, buf, EventMessage)); n != 0 {
+		t.Fatalf("catch-up and stale messages must not notify, got %d", n)
+	}
+	b.handleTable(&table.LSTable{LSInsertMessage: []*table.LSInsertMessage{{ThreadKey: 5, MessageId: "c3", TimestampMs: now.UnixMilli(), SenderId: 7}}}, modeLive)
+	if n := len(eventsOf(t, buf, EventMessage)); n != 1 {
+		t.Fatalf("live message must notify, got %d", n)
 	}
 }

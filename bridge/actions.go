@@ -83,7 +83,7 @@ func (b *MetaBackend) cacheSentFile(messageID, attachmentID string, file sendFil
 		rec.MimeType = file.Mime
 	}
 	b.store.PutMedia(messageID, attachmentID, rec)
-	if path, mimeType, err := saveMediaFile(b.dataDir, data, file.Mime, file.Name); err == nil {
+	if path, mimeType, err := saveMediaFile(b.cacheDir, data, file.Mime, file.Name); err == nil {
 		b.store.SetMediaPath(messageID, attachmentID, path, mimeType)
 	}
 }
@@ -200,7 +200,7 @@ func (b *MetaBackend) sendMediaLS(ctx context.Context, rec threadRec, file sendF
 		if msg, ok := b.store.FindMessage(msgID); ok {
 			for _, att := range msg.Attachments {
 				if r, ok := b.store.Media(msgID, att.ID); ok && r.Path == "" {
-					if path, mimeType, err := saveMediaFile(b.dataDir, data, file.Mime, file.Name); err == nil {
+					if path, mimeType, err := saveMediaFile(b.cacheDir, data, file.Mime, file.Name); err == nil {
 						b.store.SetMediaPath(msgID, att.ID, path, mimeType)
 					}
 				}
@@ -453,8 +453,9 @@ func (b *MetaBackend) uploadSentToHistory(chat types.JID, messageID, deletedID s
 	}
 	identity := waDevice.IdentityKey
 	backupID := device.BackupID
-	go func() {
-		ctx, cancel := context.WithTimeout(context.Background(), historyUploadTimeout)
+	life := b.lifeCtx()
+	goSafe(b.log, "history_upload", func() {
+		ctx, cancel := context.WithTimeout(life, historyUploadTimeout)
 		defer cancel()
 		transportBytes, err := marshalSentFBMessage(message, metadata)
 		if err == nil {
@@ -476,7 +477,7 @@ func (b *MetaBackend) uploadSentToHistory(chat types.JID, messageID, deletedID s
 		if err != nil {
 			b.log.Warn().Err(err).Msg("Failed to upload sent message to encrypted history")
 		}
-	}()
+	})
 }
 
 func messageKeyFor(rec threadRec, msg Message, self string) *waCommon.MessageKey {
@@ -554,8 +555,9 @@ func (b *MetaBackend) SetTyping(ctx context.Context, threadID string, typing boo
 	if err != nil {
 		return err
 	}
-	go func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	life := b.lifeCtx()
+	goSafe(b.log, "set_typing", func() {
+		ctx, cancel := context.WithTimeout(life, 15*time.Second)
 		defer cancel()
 		if rec.E2EE {
 			cli := b.currentE2EE()
@@ -592,15 +594,8 @@ func (b *MetaBackend) SetTyping(ctx context.Context, threadID string, typing boo
 		}); err != nil {
 			b.log.Debug().Err(err).Msg("Failed to send typing state")
 		}
-	}()
+	})
 	return nil
-}
-
-func (b *MetaBackend) Search(ctx context.Context, query, threadID string, limit int) ([]SearchHit, error) {
-	if err := b.requireLogin(); err != nil {
-		return nil, err
-	}
-	return b.store.Search(query, threadID, limit), nil
 }
 
 func (b *MetaBackend) mediaHistoryPage(ctx context.Context, rec threadRec) (progressed, possible bool) {

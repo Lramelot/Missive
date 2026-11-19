@@ -1,4 +1,8 @@
-use std::{collections::HashMap, path::PathBuf};
+use std::{
+    collections::HashMap,
+    path::PathBuf,
+    time::{Duration, Instant},
+};
 
 use futures::StreamExt as _;
 use gpui_kit::component::{
@@ -9,7 +13,9 @@ use gpui_kit::*;
 use serde_json::json;
 
 use crate::{
-    bridge::{Bridge, BridgeError, BridgeEvent, BridgeOptions},
+    bridge::{
+        Bridge, BridgeError, BridgeEvent, BridgeExit, BridgeOptions, EXITED_EVENT, RestartPolicy,
+    },
     desktop::Tray,
     model::{
         Attachment, BackfillEvent, ConnectionEvent, HistoryStatus, LoginResult, MediaItem, Message,
@@ -28,6 +34,7 @@ mod library;
 mod media;
 mod mentions;
 mod message_ops;
+mod message_store;
 mod notify_rules;
 mod planner;
 mod system;
@@ -35,7 +42,10 @@ mod thread_ops;
 mod voice;
 
 
-pub(crate) use media::{MediaJob, thumb_key};
+pub(crate) use media::{MediaQueue, thumb_key};
+pub(crate) use message_store::{MessageStore, list_change};
+
+pub(crate) const TYPING_TTL: Duration = Duration::from_secs(6);
 
 #[derive(Clone)]
 pub(crate) enum Outgoing {
@@ -122,6 +132,7 @@ pub(crate) enum Screen {
     Login,
     Main,
     Fatal(SharedString),
+    BridgeStopped(BridgeExit),
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -153,8 +164,10 @@ pub struct MissiveApp {
     pub(crate) link_detail: Option<SharedString>,
     pub(crate) threads: Vec<Thread>,
     pub(crate) selected: Option<String>,
-    pub(crate) messages: HashMap<String, Vec<Message>>,
+    pub(crate) messages: MessageStore,
+    pub(crate) recent_threads: Vec<String>,
     pub(crate) typing: HashMap<String, bool>,
+    pub(crate) typing_seen: HashMap<String, Instant>,
     pub(crate) media: HashMap<String, Media>,
     pub(crate) scroller: Entity<MessageScrollerState>,
     pub(crate) composer: Entity<TextareaState>,
@@ -196,7 +209,7 @@ pub struct MissiveApp {
     pub(crate) buffered_live: HashMap<String, Vec<Message>>,
     pub(crate) pending_scroll: Option<(String, String)>,
     pub(crate) popout_active: HashMap<String, bool>,
-    pub(crate) media_queue: std::cell::RefCell<Vec<MediaJob>>,
+    pub(crate) media_queue: std::cell::RefCell<MediaQueue>,
     pub(crate) gifs: HashMap<String, GifFrames>,
     pub(crate) gif_order: Vec<String>,
     pub(crate) gif_queue: std::cell::RefCell<Vec<(String, PathBuf)>>,
@@ -220,11 +233,14 @@ pub struct MissiveApp {
     pub(crate) exports: export::Exports,
     pub(crate) find: find::Find,
     pub(crate) drafts_saved: HashMap<String, String>,
+    pub(crate) settings_dirty: bool,
     pub(crate) last_slow_tick: std::time::Instant,
     pub(crate) read_sent: HashMap<String, i64>,
     pub(crate) clicks: std::sync::mpsc::Sender<String>,
     pub(crate) update: Option<UpdateState>,
     pub(crate) last_update_check: Option<std::time::Instant>,
+    pub(crate) bridge_restarts: RestartPolicy,
+    _restart_task: Option<Task<()>>,
     _system_task: Option<Task<()>>,
     _search_task: Option<Task<()>>,
     _subscriptions: Vec<Subscription>,
@@ -232,6 +248,19 @@ pub struct MissiveApp {
 }
 
 const DRAFTS_FILE: &str = "drafts.json";
+const OUTGOING_MAX_AGE: Duration = Duration::from_secs(7 * 24 * 60 * 60);
+
+static DRAFT_SAVES: crate::storage::SaveSlot = crate::storage::SaveSlot::new();
+
+pub(crate) fn outgoing_dir() -> Option<PathBuf> {
+    dirs::data_dir().map(|dir| outgoing_dir_in(&dir, crate::bridge::demo_requested()))
+}
+
+fn outgoing_dir_in(data_dir: &std::path::Path, demo: bool) -> PathBuf {
+    data_dir
+        .join("Missive")
+        .join(if demo { "outgoing-demo" } else { "outgoing" })
+}
 
 pub(crate) fn media_key(message_id: &str, attachment_id: &str) -> String {
     format!("{message_id}/{attachment_id}")
@@ -266,7 +295,8 @@ impl MissiveApp {
 
         let subscriptions = vec![
             cx.on_app_quit(|this, cx| {
-                this.persist_drafts(cx);
+                this.persist_drafts_now(cx);
+                this.flush_settings_now();
                 this.rescue_unsent_texts(cx);
                 async {}
             }),
@@ -311,6 +341,7 @@ impl MissiveApp {
             }),
         ];
 
+        let drafts: HashMap<String, String> = crate::storage::load_json(DRAFTS_FILE);
         let mut app = Self {
             bridge: None,
             screen: Screen::Starting,
@@ -319,8 +350,10 @@ impl MissiveApp {
             link_detail: None,
             threads: Vec::new(),
             selected: None,
-            messages: HashMap::new(),
+            messages: MessageStore::default(),
+            recent_threads: Vec::new(),
             typing: HashMap::new(),
+            typing_seen: HashMap::new(),
             media: HashMap::new(),
             scroller,
             composer,
@@ -353,13 +386,13 @@ impl MissiveApp {
             sending: 0,
             tray: Tray::create(),
             instance,
-            drafts: crate::storage::load_json(DRAFTS_FILE),
+            drafts: drafts.clone(),
             thread_gen: HashMap::new(),
             loading_threads: std::collections::HashSet::new(),
             buffered_live: HashMap::new(),
             pending_scroll: None,
             popout_active: HashMap::new(),
-            media_queue: std::cell::RefCell::new(Vec::new()),
+            media_queue: std::cell::RefCell::new(MediaQueue::default()),
             gifs: HashMap::new(),
             gif_order: Vec::new(),
             gif_queue: std::cell::RefCell::new(Vec::new()),
@@ -382,7 +415,8 @@ impl MissiveApp {
             planner: planner::Planner::load(),
             exports: Default::default(),
             find: Default::default(),
-            drafts_saved: HashMap::new(),
+            drafts_saved: drafts,
+            settings_dirty: false,
             last_slow_tick: std::time::Instant::now(),
             read_sent: HashMap::new(),
             settings,
@@ -391,31 +425,82 @@ impl MissiveApp {
             clicks,
             update: None,
             last_update_check: None,
+            bridge_restarts: RestartPolicy::default(),
+            _restart_task: None,
             _system_task: None,
             _search_task: None,
             _subscriptions: subscriptions,
             _event_task: None,
         };
 
-        match BridgeOptions::from_env().and_then(|options| Bridge::spawn(&options)) {
-            Ok((bridge, mut events)) => {
-                app.bridge = Some(bridge);
-                app._event_task = Some(cx.spawn(async move |this, cx| {
-                    while let Some(event) = events.next().await {
-                        if this
-                            .update(cx, |this, cx| this.handle_event(event, cx))
-                            .is_err()
-                        {
-                            break;
-                        }
-                    }
-                }));
-                app.load_status(cx);
-            }
-            Err(err) => app.screen = Screen::Fatal(format!("{err:#}").into()),
-        }
+        app.start_bridge(cx);
         app.start_system(clicks_rx, window, cx);
+        app.prune_outgoing(cx);
         app
+    }
+
+    fn start_bridge(&mut self, cx: &mut Context<Self>) {
+        if let Err(err) = self.spawn_bridge(cx) {
+            self.screen = Screen::Fatal(format!("{err:#}").into());
+        }
+    }
+
+    fn restart_bridge(&mut self, cx: &mut Context<Self>) {
+        if let Err(err) = self.spawn_bridge(cx) {
+            eprintln!("[app] bridge restart failed: {err:#}");
+            self.on_bridge_exited(spawn_failure_exit(&err), cx);
+        }
+    }
+
+    fn spawn_bridge(&mut self, cx: &mut Context<Self>) -> anyhow::Result<()> {
+        let (bridge, mut events) = BridgeOptions::from_env().and_then(|options| Bridge::spawn(&options))?;
+        self.bridge = Some(bridge);
+        self._event_task = Some(cx.spawn(async move |this, cx| {
+            while let Some(event) = events.next().await {
+                if this
+                    .update(cx, |this, cx| this.handle_event(event, cx))
+                    .is_err()
+                {
+                    break;
+                }
+            }
+        }));
+        self.load_status(cx);
+        Ok(())
+    }
+
+    fn on_bridge_exited(&mut self, exit: BridgeExit, cx: &mut Context<Self>) {
+        self.bridge = None;
+        match self.bridge_restarts.next_delay(Instant::now()) {
+            Some(delay) => {
+                eprintln!("[app] bridge exited, restarting in {} s", delay.as_secs());
+                self.link = Link::Reconnecting;
+                self.link_detail = Some(t!("common.bridge.restarting").into());
+                self._restart_task = Some(cx.spawn(async move |this, cx| {
+                    cx.background_executor().timer(delay).await;
+                    let _ = this.update(cx, |this, cx| {
+                        this.restart_bridge(cx);
+                        cx.notify();
+                    });
+                }));
+            }
+            None => {
+                eprintln!("[app] bridge exited too often, automatic restart stopped");
+                self._restart_task = None;
+                self.link = Link::Error;
+                self.screen = Screen::BridgeStopped(exit);
+            }
+        }
+    }
+
+    pub(crate) fn retry_bridge(&mut self, cx: &mut Context<Self>) {
+        self.bridge_restarts.reset();
+        self._restart_task = None;
+        self.screen = Screen::Starting;
+        self.link = Link::Connecting;
+        self.link_detail = None;
+        self.restart_bridge(cx);
+        cx.notify();
     }
 
     pub(crate) fn bridge(&self) -> Option<Bridge> {
@@ -428,7 +513,7 @@ impl MissiveApp {
     }
 
     pub(crate) fn set_error(&mut self, err: anyhow::Error) {
-        self.link_detail = Some(format!("{err:#}").into());
+        self.toast = Some((error_text(&err).into(), std::time::Instant::now()));
     }
 
     fn load_status(&mut self, cx: &mut Context<Self>) {
@@ -447,6 +532,7 @@ impl MissiveApp {
                         this.connect(cx);
                     }
                     Ok(_) => this.screen = Screen::Login,
+                    Err(err) if bridge_stopped(&err) => {}
                     Err(err) => this.screen = Screen::Fatal(format!("{err:#}").into()),
                 }
                 cx.notify();
@@ -462,7 +548,7 @@ impl MissiveApp {
             if let Err(err) = bridge.request("connect", json!({})).await {
                 let _ = this.update(cx, |this, cx| {
                     this.link = Link::Error;
-                    this.set_error(err);
+                    this.link_detail = Some(format!("{err:#}").into());
                     cx.notify();
                 });
             }
@@ -553,18 +639,30 @@ impl MissiveApp {
     }
 
     fn handle_event(&mut self, event: BridgeEvent, cx: &mut Context<Self>) {
-        match event.name.as_str() {
+        if self.apply_event(event, cx) {
+            cx.notify();
+        }
+    }
+
+    fn apply_event(&mut self, event: BridgeEvent, cx: &mut Context<Self>) -> bool {
+        let BridgeEvent { name, data } = event;
+        match name.as_str() {
+            EXITED_EVENT => {
+                let exit = decode_event::<BridgeExit>(&name, data).unwrap_or_default();
+                self.on_bridge_exited(exit, cx);
+            }
             "connection" => {
-                if let Ok(conn) = serde_json::from_value::<ConnectionEvent>(event.data) {
-                    let was_online = self.link == Link::Online;
-                    self.on_connection(conn);
-                    if !was_online && self.link == Link::Online {
-                        self.flush_offline_queue(cx);
-                    }
+                let Some(conn) = decode_event::<ConnectionEvent>(&name, data) else {
+                    return false;
+                };
+                let was_online = self.link == Link::Online;
+                self.on_connection(conn);
+                if !was_online && self.link == Link::Online {
+                    self.flush_offline_queue(cx);
                 }
             }
             "ready" => {
-                if let Ok(ready) = serde_json::from_value::<ReadyEvent>(event.data) {
+                if let Some(ready) = decode_event::<ReadyEvent>(&name, data) {
                     self.user = Some(ready.user);
                 }
                 eprintln!(
@@ -579,7 +677,10 @@ impl MissiveApp {
                 self.load_history_status(cx);
             }
             "threads" => {
-                if let Ok(update) = serde_json::from_value::<ThreadsEvent>(event.data) {
+                let Some(update) = decode_event::<ThreadsEvent>(&name, data) else {
+                    return false;
+                };
+                {
                     let selected = self.selected.clone();
                     let mut receipts_changed = false;
                     for thread in update.threads {
@@ -595,6 +696,9 @@ impl MissiveApp {
                                     )
                             });
                         }
+                        if self.popout_active.contains_key(&thread.id) {
+                            self.messages.touch(&thread.id);
+                        }
                         self.upsert_thread(thread);
                     }
                     self.sort_threads();
@@ -604,59 +708,88 @@ impl MissiveApp {
                 }
             }
             "thread_removed" => {
-                if let Ok(removed) = serde_json::from_value::<ThreadRemovedEvent>(event.data) {
-                    self.threads.retain(|thread| thread.id != removed.thread_id);
-                    self.messages.remove(&removed.thread_id);
-                    if self.selected.as_deref() == Some(removed.thread_id.as_str()) {
-                        self.clear_selection(cx);
-                    }
+                let Some(removed) = decode_event::<ThreadRemovedEvent>(&name, data) else {
+                    return false;
+                };
+                self.threads.retain(|thread| thread.id != removed.thread_id);
+                self.messages.remove(&removed.thread_id);
+                if self.selected.as_deref() == Some(removed.thread_id.as_str()) {
+                    self.clear_selection(cx);
                 }
             }
             "message" => {
-                if let Ok(message) = serde_json::from_value::<Message>(event.data) {
-                    self.on_message(message, cx);
-                }
+                let Some(message) = decode_event::<Message>(&name, data) else {
+                    return false;
+                };
+                self.on_message(message, cx);
             }
             "message_updated" => {
-                if let Ok(message) = serde_json::from_value::<Message>(event.data) {
-                    self.on_message_updated(message, cx);
-                }
+                let Some(message) = decode_event::<Message>(&name, data) else {
+                    return false;
+                };
+                self.on_message_updated(message, cx);
             }
             "export_progress" | "save_media_progress" => {
-                let name = event.name.clone();
-                self.on_export_event(&name, event.data, cx);
+                self.on_export_event(&name, data, cx);
             }
             "reaction_added" => {
-                if let Ok(reaction) = serde_json::from_value::<ReactionAddedEvent>(event.data) {
-                    self.notify_reaction(reaction, cx);
-                }
+                let Some(reaction) = decode_event::<ReactionAddedEvent>(&name, data) else {
+                    return false;
+                };
+                self.notify_reaction(reaction, cx);
+                return false;
             }
             "message_removed" => {
-                if let Ok(removed) = serde_json::from_value::<MessageRemovedEvent>(event.data) {
-                    self.on_message_removed(&removed.thread_id, &removed.message_id, cx);
-                }
+                let Some(removed) = decode_event::<MessageRemovedEvent>(&name, data) else {
+                    return false;
+                };
+                self.on_message_removed(&removed.thread_id, &removed.message_id, cx);
+                return false;
             }
             "messages_backfilled" => {
-                if let Ok(backfill) = serde_json::from_value::<BackfillEvent>(event.data) {
-                    self.on_backfill(backfill, cx);
-                }
+                let Some(backfill) = decode_event::<BackfillEvent>(&name, data) else {
+                    return false;
+                };
+                self.on_backfill(backfill, cx);
             }
             "presence" => {
-                if let Ok(presence) = serde_json::from_value::<PresenceEvent>(event.data) {
-                    self.presence.insert(presence.user_id, presence.online);
-                }
+                let Some(presence) = decode_event::<PresenceEvent>(&name, data) else {
+                    return false;
+                };
+                return self.presence.insert(presence.user_id, presence.online)
+                    != Some(presence.online);
             }
             "typing" => {
-                if let Ok(typing) = serde_json::from_value::<TypingEvent>(event.data) {
-                    let me = self.user.as_ref().map(|user| user.id.as_str());
-                    if me != Some(typing.user_id.as_str()) {
-                        self.typing.insert(typing.thread_id, typing.typing);
-                    }
+                let Some(typing) = decode_event::<TypingEvent>(&name, data) else {
+                    return false;
+                };
+                let me = self.user.as_ref().map(|user| user.id.as_str());
+                if me == Some(typing.user_id.as_str()) {
+                    return false;
                 }
+                return self.set_typing(typing.thread_id, typing.typing, Instant::now());
             }
-            _ => {}
+            _ => return false,
         }
-        cx.notify();
+        true
+    }
+
+    fn set_typing(&mut self, thread_id: String, typing: bool, now: Instant) -> bool {
+        if typing {
+            self.typing_seen.insert(thread_id.clone(), now);
+        } else {
+            self.typing_seen.remove(&thread_id);
+        }
+        self.typing.insert(thread_id, typing) != Some(typing)
+    }
+
+    pub(crate) fn expire_typing(&mut self, now: Instant) -> bool {
+        let expired = expired_typing(&self.typing_seen, now);
+        for thread_id in &expired {
+            self.typing_seen.remove(thread_id);
+            self.typing.remove(thread_id);
+        }
+        !expired.is_empty()
     }
 
     fn on_connection(&mut self, conn: ConnectionEvent) {
@@ -671,19 +804,15 @@ impl MissiveApp {
         }
         self.link_detail = conn.detail.clone().map(Into::into);
         if conn.permanent {
-            if conn.detail.as_deref() == Some("bridge process exited") {
-                self.screen = Screen::Fatal(t!("app.fatal.bridge_stopped").into());
-            } else {
-                self.reset_account_state();
-                self.screen = Screen::Login;
-                self.login_error = Some(
-                    t!(
-                        "app.login.session_rejected",
-                        detail = conn.detail.unwrap_or_default()
-                    )
-                    .into(),
-                );
-            }
+            self.reset_account_state();
+            self.screen = Screen::Login;
+            self.login_error = Some(
+                t!(
+                    "app.login.session_rejected",
+                    detail = conn.detail.unwrap_or_default()
+                )
+                .into(),
+            );
         }
     }
 
@@ -725,7 +854,7 @@ impl MissiveApp {
 
     pub(crate) fn erase_local_account_data(&mut self) {
         self.drafts.clear();
-        crate::storage::save_json(DRAFTS_FILE, &self.drafts);
+        DRAFT_SAVES.save_json(DRAFT_SAVES.ticket(), DRAFTS_FILE, &self.drafts);
         self.drafts_saved.clear();
         for file in ["planner.json", "favorites.json"] {
             if let Some(path) = crate::storage::data_file(file) {
@@ -739,7 +868,7 @@ impl MissiveApp {
         for folder in &mut self.settings.folders {
             folder.thread_ids.clear();
         }
-        self.settings.save();
+        self.mark_settings_dirty();
     }
 
     pub(crate) fn reset_account_state(&mut self) {
@@ -749,6 +878,7 @@ impl MissiveApp {
         self.selected = None;
         self.media.clear();
         self.typing.clear();
+        self.typing_seen.clear();
         self.presence.clear();
         self.history = History::Unknown;
         self.gallery = None;
@@ -794,7 +924,7 @@ impl MissiveApp {
 
     pub(crate) fn sort_threads(&mut self) {
         self.threads
-            .sort_by(|a, b| b.last_activity_ms.cmp(&a.last_activity_ms));
+            .sort_by_key(|thread| std::cmp::Reverse(thread.last_activity_ms));
     }
 
     fn notify_message(&self, message: &Message, is_selected: bool, cx: &mut Context<Self>) {
@@ -949,7 +1079,7 @@ impl MissiveApp {
         };
         older.sort_by_key(|m| m.timestamp_ms);
         let count = older.len();
-        older.extend(list.drain(..));
+        older.append(list);
         *list = older;
         if is_selected {
             self.scroller.update(cx, |scroller, cx| {
@@ -971,6 +1101,7 @@ impl MissiveApp {
         let is_selected = self.selected.as_deref() == Some(message.thread_id.as_str());
         let in_view = self.is_thread_in_view(&message.thread_id, is_selected);
         self.typing.remove(&message.thread_id);
+        self.typing_seen.remove(&message.thread_id);
         self.notify_message(&message, is_selected, cx);
         let receipts = self.settings.send_read_receipts;
 
@@ -1126,6 +1257,11 @@ impl MissiveApp {
             return;
         };
         if let Some(index) = list.iter().position(|existing| existing.id == message.id) {
+            if let Some(snippet) = snippet_after_update(list, &message)
+                && let Some(thread) = self.threads.iter_mut().find(|t| t.id == message.thread_id)
+            {
+                thread.snippet = snippet;
+            }
             list[index] = message;
             if is_selected {
                 self.scroller.update(cx, |scroller, cx| {
@@ -1199,6 +1335,7 @@ impl MissiveApp {
         {
             self.gallery = None;
         }
+        self.keep_thread_warm(&thread_id, cx);
         let cached = self.messages.get(&thread_id).map(Vec::len);
         self.scroller
             .update(cx, |scroller, cx| scroller.reset(cached.unwrap_or(0), cx));
@@ -1310,21 +1447,113 @@ impl MissiveApp {
     }
 
     pub(crate) fn persist_drafts(&mut self, cx: &App) {
+        if let Some((ticket, drafts)) = self.changed_drafts(cx) {
+            cx.background_spawn(async move {
+                DRAFT_SAVES.save_json(ticket, DRAFTS_FILE, &drafts);
+            })
+            .detach();
+        }
+    }
+
+    pub(crate) fn persist_drafts_now(&mut self, cx: &App) {
+        if let Some((ticket, drafts)) = self.changed_drafts(cx) {
+            DRAFT_SAVES.save_json(ticket, DRAFTS_FILE, &drafts);
+        }
+    }
+
+    fn changed_drafts(&mut self, cx: &App) -> Option<(u64, HashMap<String, String>)> {
         if self.message_ops.editing.is_some() {
+            return None;
+        }
+        let selected = self.selected.as_deref();
+        let composer = self.composer.read(cx);
+        let text = selected.map(|_| composer.value()).unwrap_or_default();
+        if drafts_unchanged(&self.drafts_saved, &self.drafts, selected, &text) {
+            return None;
+        }
+        let current = current_drafts(&self.drafts, selected, &text);
+        self.drafts_saved = current.clone();
+        Some((DRAFT_SAVES.ticket(), current))
+    }
+
+    pub(crate) fn mark_settings_dirty(&mut self) {
+        self.settings_dirty = true;
+    }
+
+    pub(crate) fn flush_settings(&mut self, cx: &App) {
+        if !std::mem::take(&mut self.settings_dirty) {
             return;
         }
-        let mut current = self.drafts.clone();
-        if let Some(thread_id) = self.selected.as_ref() {
-            let text = self.composer.read(cx).value().to_string();
-            if text.trim().is_empty() {
-                current.remove(thread_id);
-            } else {
-                current.insert(thread_id.clone(), text);
-            }
+        let settings = self.settings.clone();
+        let ticket = Settings::save_ticket();
+        cx.background_spawn(async move { settings.save_ticketed(ticket) })
+            .detach();
+    }
+
+    pub(crate) fn flush_settings_now(&mut self) {
+        if std::mem::take(&mut self.settings_dirty) {
+            self.settings.save();
         }
-        if current != self.drafts_saved {
-            crate::storage::save_json(DRAFTS_FILE, &current);
-            self.drafts_saved = current;
+    }
+
+    fn prune_outgoing(&self, cx: &App) {
+        let Some(dir) = outgoing_dir() else { return };
+        cx.background_spawn(async move {
+            let removed = crate::storage::remove_files_older_than(
+                &dir,
+                OUTGOING_MAX_AGE,
+                std::time::SystemTime::now(),
+            );
+            if removed > 0 {
+                eprintln!("[app] removed {removed} old outgoing files");
+            }
+        })
+        .detach();
+    }
+
+    pub(crate) fn clear_outgoing(&self, cx: &App) {
+        let Some(dir) = outgoing_dir() else { return };
+        cx.background_spawn(async move {
+            let _ = std::fs::remove_dir_all(dir);
+        })
+        .detach();
+    }
+
+    fn keep_thread_warm(&mut self, thread_id: &str, cx: &mut Context<Self>) {
+        message_store::remember_recent(
+            &mut self.recent_threads,
+            thread_id,
+            message_store::KEPT_RECENT_THREADS,
+        );
+        let cold = {
+            let keep = kept_threads(
+                &self.recent_threads,
+                self.selected.as_deref(),
+                self.popout_active.keys().map(String::as_str),
+            );
+            self.messages
+                .cold_threads(&keep, message_store::COLD_THREAD_MESSAGES)
+        };
+        for thread_id in cold {
+            self.trim_thread(&thread_id, cx);
+        }
+    }
+
+    fn trim_thread(&mut self, thread_id: &str, cx: &mut Context<Self>) {
+        let evicted = self
+            .messages
+            .trim_to_latest(thread_id, message_store::COLD_THREAD_MESSAGES);
+        if evicted.is_empty() {
+            return;
+        }
+        *self.thread_gen.entry(thread_id.to_string()).or_insert(0) += 1;
+        self.older.remove(thread_id);
+        for key in evicted_media_keys(&evicted) {
+            self.media.remove(&key);
+            if let Some(GifFrames::Ready(ImageSource::Render(image))) = self.gifs.remove(&key) {
+                cx.drop_image(image, None);
+            }
+            self.gif_order.retain(|cached| *cached != key);
         }
     }
 
@@ -1471,9 +1700,92 @@ pub(crate) fn action_error(err: &anyhow::Error) -> String {
         Some(bridge_error) if bridge_error.code == "edit_rejected" => {
             t!("message_ops.edit.rejected").to_string()
         }
+        Some(bridge_error) if bridge_error.code == "timeout" => t!("app.error.timeout").to_string(),
+        Some(bridge_error) if bridge_error.code == "bridge_stopped" => {
+            t!("app.error.bridge_stopped").to_string()
+        }
         Some(bridge_error) => bridge_error.message.clone(),
         None => format!("{err:#}"),
     }
+}
+
+pub(crate) fn bridge_stopped(err: &anyhow::Error) -> bool {
+    err.downcast_ref::<BridgeError>()
+        .is_some_and(|bridge_error| bridge_error.code == "bridge_stopped")
+}
+
+fn decode_event<T: serde::de::DeserializeOwned>(name: &str, data: serde_json::Value) -> Option<T> {
+    match serde_json::from_value(data) {
+        Ok(value) => Some(value),
+        Err(err) => {
+            eprintln!(
+                "[app] ignored `{name}` event: undecodable ({:?} error)",
+                err.classify()
+            );
+            None
+        }
+    }
+}
+
+fn current_drafts(
+    drafts: &HashMap<String, String>,
+    selected: Option<&str>,
+    text: &str,
+) -> HashMap<String, String> {
+    let mut current = drafts.clone();
+    if let Some(thread_id) = selected {
+        if text.trim().is_empty() {
+            current.remove(thread_id);
+        } else {
+            current.insert(thread_id.to_string(), text.to_string());
+        }
+    }
+    current
+}
+
+fn drafts_unchanged(
+    saved: &HashMap<String, String>,
+    drafts: &HashMap<String, String>,
+    selected: Option<&str>,
+    text: &str,
+) -> bool {
+    let typed = selected.filter(|_| !text.trim().is_empty());
+    let selected_in_drafts = selected.is_some_and(|id| drafts.contains_key(id));
+    let expected = drafts.len() - usize::from(selected_in_drafts) + usize::from(typed.is_some());
+    if saved.len() != expected {
+        return false;
+    }
+    if let Some(thread_id) = selected {
+        let wanted = typed.map(|_| text);
+        if saved.get(thread_id).map(String::as_str) != wanted {
+            return false;
+        }
+    }
+    drafts
+        .iter()
+        .filter(|(id, _)| Some(id.as_str()) != selected)
+        .all(|(id, draft)| saved.get(id) == Some(draft))
+}
+
+fn evicted_media_keys(messages: &[Message]) -> Vec<String> {
+    messages
+        .iter()
+        .flat_map(|message| {
+            message.attachments.iter().flat_map(move |attachment| {
+                [
+                    media_key(&message.id, &attachment.id),
+                    thumb_key(&message.id, &attachment.id),
+                ]
+            })
+        })
+        .collect()
+}
+
+fn expired_typing(seen: &HashMap<String, Instant>, now: Instant) -> Vec<String> {
+    seen.iter()
+        .filter(|(_, at)| now.saturating_duration_since(**at) >= TYPING_TTL)
+        .map(|(thread_id, _)| thread_id.clone())
+        .collect()
 }
 
 fn pin_error_message(err: &anyhow::Error) -> String {
@@ -1509,8 +1821,46 @@ pub(crate) fn last_active_label(timestamp_ms: i64) -> String {
     }
 }
 
+fn spawn_failure_exit(err: &anyhow::Error) -> BridgeExit {
+    BridgeExit {
+        code: None,
+        stderr: vec![format!("{err:#}")],
+    }
+}
+
+fn error_text(err: &anyhow::Error) -> String {
+    if err.downcast_ref::<BridgeError>().is_none() {
+        return format!("{err:#}");
+    }
+    let translated = action_error(err);
+    let outer = err.to_string();
+    if outer == err.root_cause().to_string() {
+        translated
+    } else {
+        format!("{outer}: {translated}")
+    }
+}
+
+fn snippet_after_update(list: &[Message], updated: &Message) -> Option<String> {
+    let newest = list.last().is_some_and(|last| last.id == updated.id);
+    (newest && updated.deleted).then(|| preview(updated))
+}
+
+fn kept_threads<'a>(
+    recent: &'a [String],
+    selected: Option<&'a str>,
+    popouts: impl Iterator<Item = &'a str>,
+) -> std::collections::HashSet<&'a str> {
+    let mut keep: std::collections::HashSet<&str> = recent.iter().map(String::as_str).collect();
+    keep.extend(selected);
+    keep.extend(popouts);
+    keep
+}
+
 pub(crate) fn preview(message: &Message) -> String {
-    let body = if message.text.is_empty() {
+    let body = if message.deleted {
+        t!("message.removed").to_string()
+    } else if message.text.is_empty() {
         describe_attachments(message)
     } else {
         message.text.clone()
@@ -1539,5 +1889,182 @@ pub(crate) fn describe_attachments(message: &Message) -> String {
             .unwrap_or_else(|| t!("app.attachment.file").to_string()),
         Some(_) => t!("app.attachment.other").to_string(),
         None => String::new(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[::core::prelude::v1::test]
+    fn demo_mode_never_shares_the_real_outgoing_folder() {
+        let base = std::path::Path::new("data");
+        assert_ne!(outgoing_dir_in(base, true), outgoing_dir_in(base, false));
+        assert_eq!(
+            outgoing_dir_in(base, false),
+            base.join("Missive").join("outgoing")
+        );
+    }
+
+    #[::core::prelude::v1::test]
+    fn deleted_message_preview_hides_the_kept_text() {
+        let _guard = crate::i18n::scoped("fr");
+        let deleted = Message {
+            deleted: true,
+            text: "secret".into(),
+            ..Message::default()
+        };
+        assert_eq!(preview(&deleted), "Message retiré");
+        let live = Message {
+            text: "secret".into(),
+            ..Message::default()
+        };
+        assert_eq!(preview(&live), "secret");
+    }
+
+    #[::core::prelude::v1::test]
+    fn unsending_the_newest_message_hides_it_from_the_sidebar() {
+        let _guard = crate::i18n::scoped("fr");
+        let message = |id: &str, deleted: bool| Message {
+            id: id.into(),
+            text: "secret".into(),
+            deleted,
+            ..Message::default()
+        };
+        let list = vec![message("a", false), message("b", false)];
+        assert_eq!(
+            snippet_after_update(&list, &message("b", true)).as_deref(),
+            Some("Message retiré")
+        );
+        assert_eq!(snippet_after_update(&list, &message("a", true)), None);
+        assert_eq!(snippet_after_update(&list, &message("b", false)), None);
+    }
+
+    #[::core::prelude::v1::test]
+    fn threads_open_in_a_popout_are_never_trimmed() {
+        let mut store = message_store::MessageStore::default();
+        for id in ["popout", "selected", "recent", "cold"] {
+            let list: Vec<Message> = (0..81)
+                .map(|i| Message {
+                    id: format!("{id}{i}"),
+                    ..Message::default()
+                })
+                .collect();
+            store.insert(id.into(), list);
+        }
+        let recent = vec!["recent".to_string()];
+        let keep = kept_threads(&recent, Some("selected"), ["popout"].into_iter());
+        assert_eq!(
+            store.cold_threads(&keep, message_store::COLD_THREAD_MESSAGES),
+            vec!["cold".to_string()]
+        );
+    }
+
+    #[::core::prelude::v1::test]
+    fn bridge_errors_in_toasts_are_translated() {
+        let _guard = crate::i18n::scoped("fr");
+        let timeout = || {
+            anyhow::Error::new(BridgeError {
+                code: "timeout".into(),
+                message: "no answer to `threads` after 60 s".into(),
+                data: None,
+            })
+        };
+        let expected = t!("app.error.timeout").to_string();
+        assert_eq!(error_text(&timeout()), expected);
+        assert_eq!(
+            error_text(&timeout().context("chargement")),
+            format!("chargement: {expected}")
+        );
+        assert!(!error_text(&timeout()).contains("no answer"));
+        assert_eq!(error_text(&anyhow::anyhow!("plain")), "plain");
+    }
+
+    #[::core::prelude::v1::test]
+    fn a_failed_restart_counts_as_an_exit() {
+        let exit = spawn_failure_exit(&anyhow::anyhow!("missive-bridge.exe locked"));
+        assert_eq!(exit.code, None);
+        assert_eq!(exit.stderr, vec!["missive-bridge.exe locked".to_string()]);
+        let mut policy = RestartPolicy::default();
+        let now = Instant::now();
+        for _ in 0..crate::bridge::RESTART_DELAYS.len() {
+            assert!(policy.next_delay(now).is_some());
+        }
+        assert!(policy.next_delay(now).is_none());
+    }
+
+    #[::core::prelude::v1::test]
+    fn typing_expires_six_seconds_after_the_last_event() {
+        let now = Instant::now();
+        let seen = HashMap::from([
+            ("old".to_string(), now),
+            ("fresh".to_string(), now + Duration::from_secs(4)),
+        ]);
+        assert!(expired_typing(&seen, now + Duration::from_secs(5)).is_empty());
+        assert_eq!(
+            expired_typing(&seen, now + Duration::from_secs(6)),
+            vec!["old".to_string()]
+        );
+        let mut both = expired_typing(&seen, now + Duration::from_secs(10));
+        both.sort();
+        assert_eq!(both, vec!["fresh".to_string(), "old".to_string()]);
+    }
+
+    fn drafts(entries: &[(&str, &str)]) -> HashMap<String, String> {
+        entries
+            .iter()
+            .map(|(id, text)| (id.to_string(), text.to_string()))
+            .collect()
+    }
+
+    #[::core::prelude::v1::test]
+    fn drafts_are_only_written_when_they_changed() {
+        let stored = drafts(&[("a", "hello")]);
+        assert!(drafts_unchanged(&stored, &stored, None, ""));
+        assert!(drafts_unchanged(&stored, &drafts(&[]), Some("a"), "hello"));
+        assert!(!drafts_unchanged(&stored, &drafts(&[]), Some("a"), "hello!"));
+        assert!(!drafts_unchanged(&stored, &drafts(&[]), Some("a"), "  "));
+        assert!(drafts_unchanged(&stored, &stored, Some("b"), " "));
+        assert!(!drafts_unchanged(&stored, &stored, Some("b"), "new"));
+        assert!(!drafts_unchanged(&stored, &drafts(&[("a", "other")]), None, ""));
+        assert!(!drafts_unchanged(&drafts(&[]), &stored, None, ""));
+        assert_eq!(
+            current_drafts(&drafts(&[]), Some("a"), "hello"),
+            drafts(&[("a", "hello")])
+        );
+        assert_eq!(current_drafts(&stored, Some("a"), " "), drafts(&[]));
+    }
+
+    #[::core::prelude::v1::test]
+    fn evicted_messages_release_their_media_entries() {
+        let message = Message {
+            id: "m1".into(),
+            attachments: vec![Attachment {
+                id: "a1".into(),
+                ..Attachment::default()
+            }],
+            ..Message::default()
+        };
+        assert_eq!(
+            evicted_media_keys(&[message, Message::default()]),
+            vec![media_key("m1", "a1"), thumb_key("m1", "a1")]
+        );
+    }
+
+    #[::core::prelude::v1::test]
+    fn undecodable_events_are_ignored() {
+        assert!(decode_event::<TypingEvent>("typing", json!({ "thread_id": 3 })).is_none());
+        assert!(decode_event::<BridgeExit>(EXITED_EVENT, json!({ "code": 2, "stderr": ["x"] })).is_some());
+    }
+
+    #[::core::prelude::v1::test]
+    fn stopped_bridge_errors_are_recognized() {
+        let stopped = anyhow::Error::new(BridgeError {
+            code: "bridge_stopped".into(),
+            message: String::new(),
+            data: None,
+        });
+        assert!(bridge_stopped(&stopped));
+        assert!(!bridge_stopped(&anyhow::anyhow!("other")));
     }
 }

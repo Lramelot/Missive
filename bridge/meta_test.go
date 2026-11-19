@@ -18,7 +18,7 @@ func newTestMetaBackend(t *testing.T) (*MetaBackend, *syncBuffer, string) {
 	dir := t.TempDir()
 	buf := &syncBuffer{}
 	out := NewOutput(buf, zerolog.Nop())
-	b, err := NewMetaBackend(dir, out, zerolog.Nop())
+	b, err := NewMetaBackend(dir, "", out, zerolog.Nop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -79,7 +79,7 @@ func TestMetaBackendRestoresPersistedSession(t *testing.T) {
 		t.Fatal(err)
 	}
 	buf := &syncBuffer{}
-	b, err := NewMetaBackend(dir, NewOutput(buf, zerolog.Nop()), zerolog.Nop())
+	b, err := NewMetaBackend(dir, "", NewOutput(buf, zerolog.Nop()), zerolog.Nop())
 	if err != nil {
 		t.Fatal(err)
 	}

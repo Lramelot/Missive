@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"strings"
 	"testing"
 	"time"
@@ -159,4 +160,25 @@ func TestContactsOnlyFiltersTable(t *testing.T) {
 	if len(filtered.LSDeleteThenInsertContact) != 1 || len(filtered.LSDeleteThread) != 0 {
 		t.Fatalf("unexpected filtered table %+v", filtered)
 	}
+}
+
+func TestSyncStormGuards(t *testing.T) {
+	b, buf, _ := loggedInBackend(t)
+	b.syncing.Store(true)
+	b.syncThreads(context.Background(), nil, false)
+	b.syncThreads(context.Background(), nil, true)
+	if len(eventsOf(t, buf, EventReady)) != 1 {
+		t.Fatal("a concurrent first sync must still emit ready")
+	}
+	b.syncing.Store(false)
+	if !b.shouldRunHeavySync(true) || b.shouldRunHeavySync(false) {
+		t.Fatal("heavy sync must run once and then be rate-limited")
+	}
+	b.lastHeavySync.Store(time.Now().Add(-31 * time.Minute).UnixMilli())
+	if !b.shouldRunHeavySync(false) {
+		t.Fatal("heavy sync must run again after 30 minutes")
+	}
+	b.store.UpdateThread("42", func(rec *threadRec) { rec.PeerID = "42" })
+	b.contactsRequested.Store("42", true)
+	b.resolveMissingContacts(context.Background(), nil)
 }

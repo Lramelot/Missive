@@ -18,6 +18,7 @@ func main() {
 
 func run() int {
 	dataDir := flag.String("data-dir", "", "directory where the bridge persists its session")
+	cacheDir := flag.String("cache-dir", "", "directory for downloaded media, thumbnails and avatars (defaults to --data-dir)")
 	demo := flag.Bool("demo", false, "run with a fake offline backend")
 	logLevel := flag.String("log-level", "info", "log level (trace, debug, info, warn, error)")
 	flag.Parse()
@@ -48,19 +49,33 @@ func run() int {
 		return 1
 	}
 	restrictDir(absDir)
+	absCache := absDir
+	if *cacheDir != "" {
+		if absCache, err = filepath.Abs(*cacheDir); err != nil {
+			log.Err(err).Msg("Invalid cache dir")
+			return 2
+		}
+		if err = os.MkdirAll(absCache, 0o700); err != nil {
+			log.Err(err).Str("cache_dir", absCache).Msg("Failed to create cache dir")
+			return 1
+		}
+		restrictDir(absCache)
+		migrateCacheDirs(absDir, absCache, log.With().Str("component", "cache").Logger())
+	}
+	startCacheEviction(absCache, log.With().Str("component", "cache").Logger())
 
 	out := NewOutput(os.Stdout, log)
 	var backend Backend
 	if *demo {
-		backend = NewDemoBackend(absDir, out, log.With().Str("component", "demo").Logger())
+		backend = NewDemoBackend(absDir, absCache, out, log.With().Str("component", "demo").Logger())
 	} else {
-		backend, err = NewMetaBackend(absDir, out, log.With().Str("component", "meta").Logger())
+		backend, err = NewMetaBackend(absDir, absCache, out, log.With().Str("component", "meta").Logger())
 		if err != nil {
 			log.Err(err).Msg("Failed to initialize backend")
 			return 1
 		}
 	}
-	log.Info().Str("data_dir", absDir).Bool("demo", *demo).Msg("Bridge started")
+	log.Info().Str("data_dir", absDir).Str("cache_dir", absCache).Bool("demo", *demo).Msg("Bridge started")
 
 	dispatcher := NewDispatcher(backend, out, log.With().Str("component", "dispatcher").Logger())
 	dispatcher.Run(os.Stdin)

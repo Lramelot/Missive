@@ -93,7 +93,7 @@ func (d *DemoBackend) SendMedia(ctx context.Context, threadID string, files []se
 			msg.ReplyToID = replyToID
 		}
 		d.store.PutMessage(msg)
-		if path, mimeType, err := saveMediaFile(d.dataDir, data, file.Mime, file.Name); err == nil {
+		if path, mimeType, err := saveMediaFile(d.cacheDir, data, file.Mime, file.Name); err == nil {
 			d.store.SetMediaPath(msg.ID, "media_0", path, mimeType)
 		}
 		d.store.UpdateThread(threadID, func(rec *threadRec) {
@@ -148,15 +148,6 @@ func (d *DemoBackend) SetActive(ctx context.Context, active bool) error {
 	defer d.mu.Unlock()
 	d.active = active
 	return nil
-}
-
-func (d *DemoBackend) Search(ctx context.Context, query, threadID string, limit int) ([]SearchHit, error) {
-	d.mu.Lock()
-	defer d.mu.Unlock()
-	if err := d.requireLogin(); err != nil {
-		return nil, err
-	}
-	return d.store.Search(query, threadID, limit), nil
 }
 
 func (d *DemoBackend) MediaHistory(ctx context.Context, threadID string, beforeMS int64, limit int, kinds []string, maxPages int) (MediaHistoryResult, error) {

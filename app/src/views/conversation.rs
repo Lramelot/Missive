@@ -296,7 +296,7 @@ impl MissiveApp {
                 .bg(p.online)
         };
         let members = (thread.is_group && !thread.participants.is_empty())
-            .then(|| thread.participants.len());
+            .then_some(thread.participants.len());
         let typing = self.typing.get(&thread.id).copied().unwrap_or(false);
         if typing {
             return line
@@ -568,7 +568,7 @@ impl MissiveApp {
     }
 
     pub(super) fn render_info(&self, p: &Palette, cx: &mut Context<Self>) -> AnyElement {
-        let thread = self.selected_thread().cloned();
+        let thread = self.selected_thread();
         let card = v_flex()
             .id("info-panel")
             .w(px(300.))
@@ -584,20 +584,12 @@ impl MissiveApp {
             .messages
             .get(&thread.id)
             .map(|messages| {
-                messages
-                    .iter()
-                    .rev()
-                    .flat_map(|message| {
-                        message
-                            .attachments
-                            .iter()
-                            .filter(|a| a.kind == "image")
-                            .filter_map(move |a| {
-                                self.thumb_source(message, a)
-                                    .map(|source| (message.clone(), a.clone(), source))
-                            })
+                latest_images(messages, INFO_IMAGES)
+                    .into_iter()
+                    .filter_map(|(message, a)| {
+                        self.thumb_source(message, a)
+                            .map(|source| (message.clone(), a.clone(), source))
                     })
-                    .take(9)
                     .collect()
             })
             .unwrap_or_default();
@@ -620,7 +612,7 @@ impl MissiveApp {
         };
 
         let mute_text: SharedString = self
-            .thread_mute_label(&thread)
+            .thread_mute_label(thread)
             .unwrap_or_else(|| t!("conversation.info.notifications_on").into_owned())
             .into();
         let mute_thread = thread.id.clone();
@@ -636,7 +628,7 @@ impl MissiveApp {
             .cursor_pointer()
             .hover(move |style| style.bg(hover))
             .child(
-                Icon::new(if self.thread_is_muted(&thread) {
+                Icon::new(if self.thread_is_muted(thread) {
                     IconName::BellOff
                 } else {
                     IconName::Bell
@@ -653,7 +645,7 @@ impl MissiveApp {
             .on_click(cx.listener(move |this, event: &ClickEvent, _, cx| {
                 this.open_mute_menu(&mute_thread, event.position(), cx)
             }));
-        let ephemeral = self.thread_ephemeral_label(&thread);
+        let ephemeral = self.thread_ephemeral_label(thread);
         let priority = self.is_priority_thread(&thread.id);
         let priority_thread = thread.id.clone();
         let priority_row = h_flex()
@@ -833,7 +825,7 @@ impl MissiveApp {
             });
 
         let mut actions: Vec<AnyElement> = Vec::new();
-        if self.is_request_thread(&thread) {
+        if self.is_request_thread(thread) {
             let id = thread.id.clone();
             actions.push(
                 action_entry(
@@ -858,9 +850,9 @@ impl MissiveApp {
         if let (false, Some(peer)) = (thread.is_group, thread.peer_id.clone()) {
             let blocked = thread.blocked;
             let label = if blocked {
-                t!("conversation.info.unblock", name = display_name(&thread)).into_owned()
+                t!("conversation.info.unblock", name = display_name(thread)).into_owned()
             } else {
-                t!("conversation.info.block", name = display_name(&thread)).into_owned()
+                t!("conversation.info.block", name = display_name(thread)).into_owned()
             };
             actions.push(
                 action_entry("info-block", IconName::Ban, label, !blocked, p)
@@ -883,7 +875,7 @@ impl MissiveApp {
             .into_any_element(),
         );
 
-        let members = self.render_members(&thread, p, cx);
+        let members = self.render_members(thread, p, cx);
 
         card.child(
             v_flex()
@@ -892,16 +884,16 @@ impl MissiveApp {
                 .pt_8()
                 .pb_5()
                 .px_5()
-                .child(thread_avatar(self.avatar_spec(&thread), 88., p.panel, p))
+                .child(thread_avatar(self.avatar_spec(thread), 88., p.panel, p))
                 .child(
                     div()
                         .pt_2()
                         .text_size(px(20.))
                         .font_weight(FontWeight::EXTRA_BOLD)
                         .text_center()
-                        .child(SharedString::from(display_name(&thread))),
+                        .child(SharedString::from(display_name(thread))),
                 )
-                .child(div().text_size(px(13.)).child(self.subtitle(&thread, p))),
+                .child(div().text_size(px(13.)).child(self.subtitle(thread, p))),
         )
         .child(
             v_flex()
@@ -911,7 +903,7 @@ impl MissiveApp {
                     el.child(row(IconName::Lock, ts!("conversation.e2ee")))
                 })
                 .child(notifications)
-                .when(!self.is_request_thread(&thread), |el| el.child(priority_row))
+                .when(!self.is_request_thread(thread), |el| el.child(priority_row))
                 .when_some(ephemeral, |el, label| {
                     el.child(row(
                         IconName::Timer,
@@ -1029,6 +1021,26 @@ impl MissiveApp {
         )
         .into_any_element()
     }
+}
+
+const INFO_IMAGES: usize = 9;
+
+fn latest_images(
+    messages: &[crate::model::Message],
+    limit: usize,
+) -> Vec<(&crate::model::Message, &crate::model::Attachment)> {
+    messages
+        .iter()
+        .rev()
+        .flat_map(|message| {
+            message
+                .attachments
+                .iter()
+                .filter(|a| a.kind == "image")
+                .map(move |a| (message, a))
+        })
+        .take(limit)
+        .collect()
 }
 
 fn profile_url(thread: &Thread) -> Option<String> {
@@ -1281,5 +1293,36 @@ impl MissiveApp {
                 .children(rows)
                 .into_any_element(),
         )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::latest_images;
+    use crate::model::{Attachment, Message};
+
+    #[::core::prelude::v1::test]
+    fn info_panel_only_considers_the_latest_images() {
+        let messages: Vec<Message> = (0..20)
+            .map(|index| Message {
+                id: format!("m{index}"),
+                attachments: vec![
+                    Attachment {
+                        id: "a".into(),
+                        kind: if index % 4 == 0 { "file" } else { "image" }.into(),
+                        ..Attachment::default()
+                    },
+                ],
+                ..Message::default()
+            })
+            .collect();
+        let latest: Vec<&str> = latest_images(&messages, 9)
+            .into_iter()
+            .map(|(message, _)| message.id.as_str())
+            .collect();
+        assert_eq!(
+            latest,
+            ["m19", "m18", "m17", "m15", "m14", "m13", "m11", "m10", "m9"]
+        );
     }
 }

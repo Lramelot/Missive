@@ -13,9 +13,8 @@ use crate::{app::MissiveApp, style::Palette};
 #[derive(Clone, PartialEq, Eq)]
 struct Snapshot {
     exists: bool,
-    count: usize,
-    first: Option<String>,
-    last: Option<String>,
+    revision: u64,
+    ids: Vec<String>,
 }
 
 pub struct Popout {
@@ -90,21 +89,30 @@ impl Popout {
     }
 
     fn snapshot(app: &Entity<MissiveApp>, thread_id: &str, cx: &App) -> Snapshot {
-        let list = app.read(cx).messages.get(thread_id);
+        let messages = &app.read(cx).messages;
+        let list = messages.get(thread_id);
         Snapshot {
             exists: list.is_some(),
-            count: list.map(Vec::len).unwrap_or(0),
-            first: list.and_then(|l| l.first().map(|m| m.id.clone())),
-            last: list.and_then(|l| l.last().map(|m| m.id.clone())),
+            revision: messages.revision(thread_id),
+            ids: list
+                .map(|list| list.iter().map(|m| m.id.clone()).collect())
+                .unwrap_or_default(),
         }
     }
 
     fn sync(&mut self, cx: &mut Context<Self>) {
-        let now = Self::snapshot(&self.app, &self.thread_id, cx);
-        if now == self.last_seen {
+        let (exists, revision) = {
+            let messages = &self.app.read(cx).messages;
+            (
+                messages.contains_key(&self.thread_id),
+                messages.revision(&self.thread_id),
+            )
+        };
+        if exists == self.last_seen.exists && revision == self.last_seen.revision {
             cx.notify();
             return;
         }
+        let now = Self::snapshot(&self.app, &self.thread_id, cx);
         let before = std::mem::replace(&mut self.last_seen, now.clone());
         if !now.exists {
             let thread_id = self.thread_id.clone();
@@ -114,15 +122,21 @@ impl Popout {
                     .update(cx, |app, cx| app.load_messages(thread_id, cx));
             }
         }
-        let grew = now.count.saturating_sub(before.count);
-        let in_sync = self.scroller.read(cx).item_count() == before.count && before.count > 0;
-        self.scroller.update(cx, |scroller, cx| {
-            if in_sync && grew > 0 && now.first == before.first {
-                scroller.append(grew, cx);
-            } else if in_sync && grew > 0 && now.last == before.last {
-                scroller.prepend(grew, cx);
-            } else {
-                scroller.reset(now.count, cx);
+        let in_sync =
+            self.scroller.read(cx).item_count() == before.ids.len() && !before.ids.is_empty();
+        let change = crate::app::list_change(&before.ids, &now.ids);
+        self.scroller.update(cx, |scroller, cx| match change {
+            None => scroller.remeasure(cx),
+            Some((range, count))
+                if in_sync && !(range.start == 0 && range.end == before.ids.len()) =>
+            {
+                let start = range.start;
+                scroller.splice(range, count, cx);
+                let end = (start + count + 1).min(scroller.item_count());
+                scroller.remeasure_items(start.saturating_sub(1)..end, cx);
+            }
+            Some(_) => {
+                scroller.reset(now.ids.len(), cx);
                 scroller.scroll_to_end(cx);
             }
         });

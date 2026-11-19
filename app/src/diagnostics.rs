@@ -222,15 +222,14 @@ impl RotatingLog {
     }
 
     fn append(&mut self, line: &str) {
-        if let Some(file) = self.file.as_mut() {
-            if file
+        if let Some(file) = self.file.as_mut()
+            && file
                 .write_all(line.as_bytes())
                 .and_then(|_| file.write_all(b"\n"))
                 .is_ok()
             {
                 self.size += line.len() as u64 + 1;
             }
-        }
     }
 
     fn reopen(&mut self) {

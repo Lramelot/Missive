@@ -65,6 +65,56 @@ impl Render for MissiveApp {
                     .child(div().text_color(p.text_muted).child(message.clone())),
             )
             .into_any_element(),
+            Screen::BridgeStopped(exit) => {
+                let code = match exit.code {
+                    Some(code) => t!("common.bridge.exit_code", code = code).to_string(),
+                    None => t!("common.bridge.exit_unknown").to_string(),
+                };
+                let lines = exit.stderr.clone();
+                centered(
+                    v_flex()
+                        .gap_3()
+                        .max_w(px(640.))
+                        .child(
+                            div()
+                                .text_size(px(18.))
+                                .font_weight(FontWeight::SEMIBOLD)
+                                .child(ts!("app.fatal.bridge_stopped")),
+                        )
+                        .child(div().text_color(p.text_muted).child(ts!("common.bridge.gave_up")))
+                        .child(div().text_color(p.text_muted).child(SharedString::from(code)))
+                        .when(!lines.is_empty(), |el| {
+                            el.child(
+                                div()
+                                    .text_size(px(12.5))
+                                    .text_color(p.text_muted)
+                                    .child(ts!("common.bridge.recent_output")),
+                            )
+                            .child(
+                                v_flex()
+                                    .p_2()
+                                    .rounded(px(8.))
+                                    .bg(p.chip_bg)
+                                    .text_size(px(11.5))
+                                    .overflow_hidden()
+                                    .children(
+                                        lines
+                                            .into_iter()
+                                            .map(|line| div().child(SharedString::from(line))),
+                                    ),
+                            )
+                        })
+                        .child(
+                            h_flex().child(
+                                Button::new("bridge-restart")
+                                    .primary()
+                                    .label(t!("common.bridge.restart"))
+                                    .on_click(cx.listener(|this, _, _, cx| this.retry_bridge(cx))),
+                            ),
+                        ),
+                )
+                .into_any_element()
+            }
             Screen::Login => self.render_login(&p, cx).into_any_element(),
             Screen::Main => h_flex()
                 .flex_1()

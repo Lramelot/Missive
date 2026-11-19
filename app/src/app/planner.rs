@@ -1,12 +1,11 @@
 use std::{
-    borrow::Cow,
     collections::HashMap,
     time::{Duration, Instant},
 };
 
 use chrono::{
     Datelike as _, Duration as Span, Local, NaiveDate, NaiveDateTime, NaiveTime, TimeZone as _,
-    Timelike as _, Weekday,
+    Timelike as _,
 };
 use gpui_kit::component::input::{InputEvent, InputState, Position};
 use gpui_kit::*;
@@ -17,6 +16,7 @@ use crate::{
     model::{Mention, Message},
     notifications::{self, Notification},
     settings::Snippet,
+    timefmt::{self, Day},
 };
 
 const PLANNER_FILE: &str = "planner.json";
@@ -33,35 +33,6 @@ const PREVIEW_CHARS: usize = 160;
 const STABLE_ONLINE_MS: i64 = 20_000;
 const RESUME_GAP_MS: i64 = 5_000;
 const PREFETCH_BACKOFF: Duration = Duration::from_secs(30);
-
-fn weekday_name(weekday: Weekday) -> Cow<'static, str> {
-    match weekday {
-        Weekday::Mon => t!("common.weekday.mon"),
-        Weekday::Tue => t!("common.weekday.tue"),
-        Weekday::Wed => t!("common.weekday.wed"),
-        Weekday::Thu => t!("common.weekday.thu"),
-        Weekday::Fri => t!("common.weekday.fri"),
-        Weekday::Sat => t!("common.weekday.sat"),
-        Weekday::Sun => t!("common.weekday.sun"),
-    }
-}
-
-fn month_name(month: u32) -> Cow<'static, str> {
-    match month {
-        1 => t!("common.month_short.jan"),
-        2 => t!("common.month_short.feb"),
-        3 => t!("common.month_short.mar"),
-        4 => t!("common.month_short.apr"),
-        5 => t!("common.month_short.may"),
-        6 => t!("common.month_short.jun"),
-        7 => t!("common.month_short.jul"),
-        8 => t!("common.month_short.aug"),
-        9 => t!("common.month_short.sep"),
-        10 => t!("common.month_short.oct"),
-        11 => t!("common.month_short.nov"),
-        _ => t!("common.month_short.dec"),
-    }
-}
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 #[serde(default)]
@@ -202,45 +173,6 @@ pub(crate) fn reminder_presets(now: NaiveDateTime) -> Vec<(SharedString, NaiveDa
     presets
 }
 
-fn parse_date(text: &str, today: NaiveDate) -> Option<NaiveDate> {
-    let lower = text.trim().to_lowercase();
-    match lower.as_str() {
-        "aujourd'hui" | "aujourd’hui" | "today" => return Some(today),
-        "demain" | "tomorrow" => return Some(today + Span::days(1)),
-        _ => {}
-    }
-    let parts: Vec<&str> = lower
-        .split(['/', '-', '.'])
-        .map(str::trim)
-        .collect();
-    let number = |part: &str| -> Option<u32> {
-        (!part.is_empty() && part.chars().all(|c| c.is_ascii_digit()))
-            .then(|| part.parse().ok())
-            .flatten()
-    };
-    match parts.as_slice() {
-        [day, month] => {
-            let (day, month) = (number(day)?, number(month)?);
-            let this_year = NaiveDate::from_ymd_opt(today.year(), month, day)?;
-            if this_year < today {
-                NaiveDate::from_ymd_opt(today.year() + 1, month, day)
-            } else {
-                Some(this_year)
-            }
-        }
-        [day, month, year] => {
-            let (day, month, year) = (number(day)?, number(month)?, number(year)?);
-            let year = match year {
-                0..=99 => 2000 + year as i32,
-                1000..=9999 => year as i32,
-                _ => return None,
-            };
-            NaiveDate::from_ymd_opt(year, month, day)
-        }
-        _ => None,
-    }
-}
-
 fn parse_time(text: &str) -> Option<NaiveTime> {
     let lower = text.trim().to_lowercase();
     let (hour, minute) = match lower.split_once([':', 'h']) {
@@ -267,7 +199,7 @@ pub(crate) fn parse_when(
     now: NaiveDateTime,
 ) -> Result<NaiveDateTime, SharedString> {
     let date =
-        parse_date(date, now.date()).ok_or_else(|| ts!("planner.picker.invalid_date"))?;
+        timefmt::parse_input_date(date, now.date()).ok_or_else(|| ts!("planner.picker.invalid_date"))?;
     let time = parse_time(time).ok_or_else(|| ts!("planner.picker.invalid_time"))?;
     let at = date.and_time(time);
     if at <= now {
@@ -280,40 +212,31 @@ pub(crate) fn parse_when(
 }
 
 pub(crate) fn format_when(target: NaiveDateTime, now: NaiveDateTime) -> String {
-    let clock = format!("{}:{:02}", target.hour(), target.minute());
-    let days = (target.date() - now.date()).num_days();
-    let label = match days {
-        0 => t!("planner.when.today", clock = clock),
-        1 => t!("planner.when.tomorrow", clock = clock),
-        -1 => t!("planner.when.yesterday", clock = clock),
-        2..=6 => t!(
+    let clock = timefmt::clock_compact(&target);
+    let label = match timefmt::relative_day(target.date(), now.date()) {
+        Day::Today => t!("planner.when.today", clock = clock),
+        Day::Tomorrow => t!("planner.when.tomorrow", clock = clock),
+        Day::Yesterday => t!("planner.when.yesterday", clock = clock),
+        Day::NextWeek(weekday) => t!(
             "planner.when.weekday",
-            weekday = weekday_name(target.weekday()),
+            weekday = timefmt::weekday_name(weekday),
             clock = clock
         ),
         _ if target.year() == now.year() => t!(
             "planner.when.date",
             day = target.day(),
-            month = month_name(target.month()),
+            month = timefmt::month_short(target.month()),
             clock = clock
         ),
         _ => t!(
             "planner.when.date_year",
             day = target.day(),
-            month = month_name(target.month()),
+            month = timefmt::month_short(target.month()),
             year = target.year(),
             clock = clock
         ),
     };
     label.to_string()
-}
-
-pub(crate) fn capitalize(text: &str) -> String {
-    let mut chars = text.chars();
-    match chars.next() {
-        Some(first) => first.to_uppercase().chain(chars).collect(),
-        None => String::new(),
-    }
 }
 
 pub(crate) fn snippet_query(text: &str) -> Option<(usize, String)> {
@@ -935,7 +858,7 @@ impl MissiveApp {
             })
             .cloned()
             .collect();
-        results.sort_by(|a, b| b.added_ms.cmp(&a.added_ms));
+        results.sort_by_key(|item| std::cmp::Reverse(item.added_ms));
         results
     }
 
@@ -1277,7 +1200,7 @@ impl MissiveApp {
     }
 
     pub(crate) fn planner_when_title(&self, ms: i64) -> String {
-        capitalize(&when_label(ms))
+        timefmt::capitalized(&when_label(ms))
     }
 
     pub(crate) fn schedule_choices(&self) -> Vec<(SharedString, i64)> {
@@ -1384,8 +1307,8 @@ impl MissiveApp {
             _ => None,
         }
         .unwrap_or_else(|| (local_now().date() + Span::days(1)).and_time(hm(9, 0)));
-        let date_value = initial.format("%d/%m/%Y").to_string();
-        let time_value = initial.format("%H:%M").to_string();
+        let date_value = timefmt::input_date(initial.date());
+        let time_value = timefmt::input_clock(&initial);
         let date = cx.new(|cx| {
             InputState::new(window, cx)
                 .placeholder(t!("planner.picker.date_placeholder"))
@@ -1630,6 +1553,7 @@ mod tests {
 
     #[::core::prelude::v1::test]
     fn picker_validates_future_and_one_year() {
+        let _guard = crate::i18n::scoped("fr");
         let now = at(2026, 11, 18, 10, 0);
         assert_eq!(parse_when("19/11/2026", "08:30", now), Ok(at(2026, 11, 19, 8, 30)));
         assert_eq!(parse_when("19/11/26", "8h", now), Ok(at(2026, 11, 19, 8, 0)));
@@ -1650,10 +1574,12 @@ mod tests {
         assert_eq!(parse_when("Tomorrow", "7", now), Ok(at(2026, 11, 19, 7, 0)));
         assert_eq!(parse_when("demain", "7", now), Ok(at(2026, 11, 19, 7, 0)));
         assert_eq!(parse_when("aujourd’hui", "11:00", now), Ok(at(2026, 11, 18, 11, 0)));
-        assert_eq!(parse_when("02/01", "9:15", now), Ok(at(2027, 1, 2, 9, 15)));
+        assert_eq!(parse_when("02/01", "9:15", now), Ok(at(2027, 2, 1, 9, 15)));
+        assert_eq!(parse_when("12/25/2026", "9:15", now), Ok(at(2026, 12, 25, 9, 15)));
+        assert!(parse_when("25/12/2026", "9:15", now).is_err());
         assert_eq!(
             parse_when("soon", "09:00", now),
-            Err(SharedString::from("Invalid date: use DD/MM/YYYY."))
+            Err(SharedString::from("Invalid date: use MM/DD/YYYY."))
         );
         assert_eq!(
             parse_when("today", "09:00", now),
@@ -1694,12 +1620,12 @@ mod tests {
     fn relative_labels_in_english() {
         let _guard = crate::i18n::scoped("en");
         let now = at(2026, 11, 18, 10, 0);
-        assert_eq!(format_when(at(2026, 11, 18, 9, 5), now), "today at 9:05");
-        assert_eq!(format_when(at(2026, 11, 19, 9, 5), now), "tomorrow at 9:05");
-        assert_eq!(format_when(at(2026, 11, 17, 9, 5), now), "yesterday at 9:05");
-        assert_eq!(format_when(at(2026, 11, 23, 9, 5), now), "Monday at 9:05");
-        assert_eq!(format_when(at(2026, 12, 2, 9, 0), now), "Dec 2 at 9:00");
-        assert_eq!(format_when(at(2027, 11, 5, 9, 5), now), "Nov 5, 2027 at 9:05");
+        assert_eq!(format_when(at(2026, 11, 18, 9, 5), now), "today at 9:05 AM");
+        assert_eq!(format_when(at(2026, 11, 19, 21, 5), now), "tomorrow at 9:05 PM");
+        assert_eq!(format_when(at(2026, 11, 17, 9, 5), now), "yesterday at 9:05 AM");
+        assert_eq!(format_when(at(2026, 11, 23, 9, 5), now), "Monday at 9:05 AM");
+        assert_eq!(format_when(at(2026, 12, 2, 9, 0), now), "Dec 2 at 9:00 AM");
+        assert_eq!(format_when(at(2027, 11, 5, 9, 5), now), "Nov 5, 2027 at 9:05 AM");
     }
 
     #[::core::prelude::v1::test]

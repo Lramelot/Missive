@@ -41,7 +41,7 @@ func TestSafeFileName(t *testing.T) {
 func demoArchive(t *testing.T) (*DemoBackend, *syncBuffer) {
 	t.Helper()
 	buf := &syncBuffer{}
-	d := NewDemoBackend(t.TempDir(), NewOutput(buf, zerolog.Nop()), zerolog.Nop())
+	d := NewDemoBackend(t.TempDir(), "", NewOutput(buf, zerolog.Nop()), zerolog.Nop())
 	t.Cleanup(d.Close)
 	return d, buf
 }

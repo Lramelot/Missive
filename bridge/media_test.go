@@ -233,3 +233,43 @@ func TestDemoMediaGeneratesPNG(t *testing.T) {
 		t.Fatalf("got %s", code)
 	}
 }
+
+func TestMediaURLAllowList(t *testing.T) {
+	for raw, want := range map[string]bool{
+		"https://scontent.xx.fbcdn.net/v/t1/p.jpg":      true,
+		"https://cdn.fbsbx.com/v/file.pdf":              true,
+		"https://scontent.cdninstagram.com/x.jpg":       true,
+		"https://lookaside.facebook.com/x":              true,
+		"http://scontent.xx.fbcdn.net/p.jpg":            false,
+		"https://evil.example/fbcdn.net/x":              false,
+		"https://fbcdn.net.evil.example/x":              false,
+		"https://user:pw@scontent.xx.fbcdn.net/p":       false,
+		"https://127.0.0.1/admin":                       false,
+		"file:///C:/Windows/system32/drivers/etc/hosts": false,
+	} {
+		u, _ := url.Parse(raw)
+		if got := defaultMediaURLAllowed(u); got != want {
+			t.Errorf("%s: got %v want %v", raw, got, want)
+		}
+	}
+	outside := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.Write([]byte("secret")) }))
+	defer outside.Close()
+	allowed := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/redirect" {
+			http.Redirect(w, r, outside.URL+"/x", http.StatusFound)
+			return
+		}
+		w.Write(make([]byte, 2048))
+	}))
+	defer allowed.Close()
+	allowTestServer(t, allowed)
+	dir := t.TempDir()
+	f, _ := newMediaTemp(dir)
+	defer discardMediaTemp(f)
+	if _, err := httpDownloadToFile(context.Background(), allowed.URL+"/redirect", 1<<20, f); err == nil {
+		t.Fatal("redirect to a non-Meta host must be refused")
+	}
+	if _, err := httpDownloadToFile(context.Background(), allowed.URL+"/big", 1024, f); err == nil || !strings.Contains(err.Error(), "larger") {
+		t.Fatalf("size cap not enforced: %v", err)
+	}
+}

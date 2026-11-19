@@ -33,7 +33,10 @@ func byteSpanFromUTF16(text string, offset, length int) (int, int, bool) {
 	if offset < 0 || length <= 0 || offset >= units {
 		return 0, 0, false
 	}
-	end := min(offset+length, units)
+	end := units
+	if length < units-offset {
+		end = offset + length
+	}
 	start, stop := offsets[offset], offsets[end]
 	if start < 0 || stop < 0 || stop <= start {
 		return 0, 0, false
@@ -42,7 +45,7 @@ func byteSpanFromUTF16(text string, offset, length int) (int, int, bool) {
 }
 
 func utf16SpanFromBytes(text string, offset, length int) (int, int, bool) {
-	if offset < 0 || length <= 0 || offset+length > len(text) || !runeBoundary(text, offset) || !runeBoundary(text, offset+length) {
+	if offset < 0 || length <= 0 || offset > len(text) || length > len(text)-offset || !runeBoundary(text, offset) || !runeBoundary(text, offset+length) {
 		return 0, 0, false
 	}
 	start := len(utf16.Encode([]rune(text[:offset])))

@@ -225,13 +225,14 @@ fn format_until(timestamp_ms: i64) -> String {
         return String::new();
     };
     let days = (time.date_naive() - Local::now().date_naive()).num_days();
+    let clock = crate::timefmt::clock(&time);
     match days {
-        0 => time.format("%H:%M").to_string(),
-        1 => t!("thread_ops.until.tomorrow", time = time.format("%H:%M")).into_owned(),
+        0 => clock,
+        1 => t!("thread_ops.until.tomorrow", time = clock).into_owned(),
         _ => t!(
             "thread_ops.until.date",
-            date = time.format("%d/%m"),
-            time = time.format("%H:%M")
+            date = crate::timefmt::day_month_numeric(&time),
+            time = clock
         )
         .into_owned(),
     }
@@ -420,11 +421,10 @@ impl MissiveApp {
             self.settings.locally_unread.len(),
             self.settings.locally_archived.len(),
         );
-        if let Some(selected) = self.selected.clone() {
-            if self.thread_ops.keep_unread.as_ref() != Some(&selected) {
+        if let Some(selected) = self.selected.clone()
+            && self.thread_ops.keep_unread.as_ref() != Some(&selected) {
                 self.settings.locally_unread.retain(|id| *id != selected);
             }
-        }
         let threads = &self.threads;
         self.settings.locally_archived.retain(|id, at| {
             !threads
@@ -436,7 +436,7 @@ impl MissiveApp {
             self.settings.locally_archived.len(),
         );
         if before != after {
-            self.settings.save();
+            self.mark_settings_dirty();
             cx.notify();
         }
     }
@@ -574,7 +574,7 @@ impl MissiveApp {
                 self.mark_thread_read(thread_id, cx);
             }
         }
-        self.settings.save();
+        self.mark_settings_dirty();
         cx.notify();
     }
 
@@ -598,7 +598,7 @@ impl MissiveApp {
             self.settings.locally_archived.remove(thread_id);
             self.show_toast(t!("thread_ops.toast.unarchived"), cx);
         }
-        self.settings.save();
+        self.mark_settings_dirty();
         if self.filter == Filter::Archived && self.folder_count(Filter::Archived) == 0 {
             self.filter = Filter::All;
         }
@@ -610,7 +610,7 @@ impl MissiveApp {
             return;
         }
         self.settings.locally_archived.clear();
-        self.settings.save();
+        self.mark_settings_dirty();
         if self.filter == Filter::Archived && self.folder_count(Filter::Archived) == 0 {
             self.filter = Filter::All;
         }
@@ -860,7 +860,7 @@ impl MissiveApp {
                     self.settings.locally_archived.len(),
                 )
         {
-            self.settings.save();
+            self.mark_settings_dirty();
         }
     }
 
@@ -1484,7 +1484,7 @@ impl MissiveApp {
 
     fn reveal_thread(&mut self, thread_id: &str) {
         if self.settings.locally_archived.remove(thread_id).is_some() {
-            self.settings.save();
+            self.mark_settings_dirty();
         }
         let Some(thread) = self.thread_by_id(thread_id) else {
             return;
@@ -1541,7 +1541,7 @@ impl MissiveApp {
             self.settings.priority_threads.push(thread_id.to_string());
             self.show_toast(t!("thread_ops.toast.priority_added"), cx);
         }
-        self.settings.save();
+        self.mark_settings_dirty();
         cx.notify();
     }
 
@@ -1586,11 +1586,11 @@ impl MissiveApp {
         let name = folder.name.clone();
         if inside && !present {
             folder.thread_ids.push(thread_id.to_string());
-            self.settings.save();
+            self.mark_settings_dirty();
             self.show_toast(t!("thread_ops.toast.added_to_folder", name = name), cx);
         } else if !inside && present {
             folder.thread_ids.retain(|id| id != thread_id);
-            self.settings.save();
+            self.mark_settings_dirty();
             self.show_toast(t!("thread_ops.toast.removed_from_folder", name = name), cx);
         } else {
             cx.notify();
@@ -1688,7 +1688,7 @@ impl MissiveApp {
                 {
                     folder.name = name;
                 }
-                self.settings.save();
+                self.mark_settings_dirty();
                 self.show_toast(t!("thread_ops.toast.folder_renamed"), cx);
             }
             FolderDialogMode::Create { thread_id } => {
@@ -1698,7 +1698,7 @@ impl MissiveApp {
                     name: name.clone(),
                     thread_ids: thread_id.iter().cloned().collect(),
                 });
-                self.settings.save();
+                self.mark_settings_dirty();
                 if thread_id.is_some() {
                     self.show_toast(t!("thread_ops.toast.added_to_new_folder", name = name), cx);
                 } else {
@@ -1723,7 +1723,7 @@ impl MissiveApp {
         if self.thread_ops.folder.as_deref() == Some(folder_id) {
             self.thread_ops.folder = None;
         }
-        self.settings.save();
+        self.mark_settings_dirty();
         self.show_toast(t!("thread_ops.toast.folder_deleted"), cx);
     }
 }

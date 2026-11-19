@@ -344,6 +344,9 @@ message:
   removed:
     en: "Message removed"
     fr: "Message retiré"
+  deleted_label:
+    en: "This message was deleted"
+    fr: "Ce message a été supprimé"
   edited:
     en: "edited"
     fr: "modifié"

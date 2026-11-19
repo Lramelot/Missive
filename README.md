@@ -55,6 +55,10 @@ password: it only keeps the session cookies, encrypted on your disk with Windows
 - Cookies, tokens and the message cache are encrypted on disk (`%APPDATA%\Missive\bridge`). The
   end-to-end encryption key store and downloaded media are not; they stay protected by your Windows
   account permissions.
+- Downloaded media, thumbnails and profile pictures are kept in a local cache
+  (`%LOCALAPPDATA%\Missive\cache`), outside the roaming profile, so they are not copied to other
+  computers of a domain account. Missive moves them there from `%APPDATA%\Missive\bridge` on the
+  first start of this version.
 - Technical logs (`%LOCALAPPDATA%\Missive\logs`) contain no message text, names or cookies.
   "Settings → Copy diagnostics" lets you share them to report a bug.
 - No telemetry.

@@ -6,16 +6,17 @@ import (
 	"errors"
 	"slices"
 	"strconv"
+	"strings"
 	"sync"
 	"testing"
 	"time"
 
 	"go.mau.fi/whatsmeow/proto/waConsumerApplication"
-	waTypes "go.mau.fi/whatsmeow/types"
-	"go.mau.fi/whatsmeow/types/events"
 
 	"go.mau.fi/mautrix-meta/pkg/messagix/socket"
 	"go.mau.fi/mautrix-meta/pkg/messagix/table"
+	waTypes "go.mau.fi/whatsmeow/types"
+	"go.mau.fi/whatsmeow/types/events"
 )
 
 const readBaseMS = int64(1_763_000_000_000)
@@ -386,5 +387,46 @@ func TestReadReceiptsOnlyFromMarkReadAndSend(t *testing.T) {
 	}
 	if tasks, calls := markReadTasks(rec), reads.snapshot(); len(tasks) != 2 || len(calls) != 1 {
 		t.Fatalf("mark_read must send LS and E2EE receipts: %+v %+v", tasks, calls)
+	}
+}
+
+func TestReadReceipts(t *testing.T) {
+	b, buf, _ := newTestMetaBackend(t)
+	b.store.SetSelfID(testSelf)
+	ts := time.Now().UnixMilli()
+	b.handleTable(&table.LSTable{
+		LSDeleteThenInsertThread: []*table.LSDeleteThenInsertThread{{ThreadKey: 77, ThreadType: table.GROUP_THREAD, ThreadName: "Team", LastActivityTimestampMs: ts}},
+		LSVerifyContactRowExists: []*table.LSVerifyContactRowExists{{ContactId: 8, Name: "Eight", ProfilePictureUrl: "https://cdn/8.jpg"}, {ContactId: 9, Name: "Nine"}},
+		LSAddParticipantIdToGroupThread: []*table.LSAddParticipantIdToGroupThread{
+			{ThreadKey: 77, ContactId: 8, Nickname: "Huit", ReadWatermarkTimestampMs: ts - 5000},
+			{ThreadKey: 77, ContactId: 999, ReadWatermarkTimestampMs: ts},
+		},
+	}, modeHistory)
+	th, _ := b.store.ThreadView("77")
+	if len(th.ReadReceipts) != 1 || th.ReadReceipts[0] != (ReadReceipt{UserID: "8", Name: "Huit", AvatarURL: "https://cdn/8.jpg", ReadMS: ts - 5000}) {
+		t.Fatalf("unexpected receipts %+v", th.ReadReceipts)
+	}
+	before := len(eventsOf(t, buf, EventThreads))
+	b.handleTable(&table.LSTable{
+		LSUpdateReadReceipt: []*table.LSUpdateReadReceipt{{ThreadKey: 77, ContactId: 9, ReadWatermarkTimestampMs: ts - 1000}, {ThreadKey: 77, ContactId: 8, ReadWatermarkTimestampMs: ts - 9000}},
+	}, modeLive)
+	th, _ = b.store.ThreadView("77")
+	if len(th.ReadReceipts) != 2 || th.ReadReceipts[0].UserID != "9" || th.ReadReceipts[1].ReadMS != ts-5000 {
+		t.Fatalf("receipts must be max-merged and sorted newest first: %+v", th.ReadReceipts)
+	}
+	if len(eventsOf(t, buf, EventThreads)) != before+1 || len(eventsOf(t, buf, EventRead)) != 2 {
+		t.Fatal("live receipt change must emit a threads upsert and read events")
+	}
+
+	chat := waTypes.NewJID(testPeerID, waTypes.MessengerServer)
+	b.ensureE2EEThread(chat)
+	b.handleWAReceipt(&events.Receipt{MessageSource: waTypes.MessageSource{Chat: chat, Sender: chat}, Type: waTypes.ReceiptTypeRead, Timestamp: time.UnixMilli(ts)})
+	if th, _ := b.store.ThreadView(testPeerID); len(th.ReadReceipts) != 1 || th.ReadReceipts[0].ReadMS != ts {
+		t.Fatalf("e2ee receipt not stored: %+v", th.ReadReceipts)
+	}
+	b.store.UpdateThread("1234", func(rec *threadRec) { rec.IsGroup = true })
+	empty, _ := b.store.ThreadView("1234")
+	if raw, _ := json.Marshal(empty); !strings.Contains(string(raw), `"read_receipts":[]`) {
+		t.Fatalf("empty read_receipts must serialize as []: %s", raw)
 	}
 }

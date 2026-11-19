@@ -46,6 +46,24 @@ pub(super) fn summary(message: &Message) -> String {
     }
 }
 
+pub(super) fn pinned_preview(message: &Message) -> String {
+    if message.deleted {
+        return t!("message_dialogs.pinned.removed").into_owned();
+    }
+    let body = summary(message);
+    if !body.is_empty() {
+        return body;
+    }
+    match &message.poll {
+        Some(poll) if !poll.question.trim().is_empty() => poll
+            .question
+            .split_whitespace()
+            .collect::<Vec<_>>()
+            .join(" "),
+        _ => t!("message_dialogs.pinned.message").into_owned(),
+    }
+}
+
 pub(super) fn menu_item(
     id: impl Into<ElementId>,
     icon: IconName,
@@ -894,18 +912,7 @@ impl MissiveApp {
             .messages
             .get(&thread.id)
             .and_then(|list| list.iter().find(|m| m.id == pinned_id));
-        let text: Option<String> = pinned.map(|message| {
-            if message.deleted {
-                t!("message_dialogs.pinned.removed").into_owned()
-            } else {
-                let body = summary(message);
-                if body.is_empty() {
-                    t!("message_dialogs.pinned.message").into_owned()
-                } else {
-                    body
-                }
-            }
-        });
+        let text: Option<String> = pinned.map(pinned_preview);
         let loaded = text.is_some();
         let thread_id = thread.id.clone();
         let bar = h_flex()
@@ -955,5 +962,43 @@ impl MissiveApp {
                 this.jump_to_message(thread_id.clone(), pinned_id.clone(), cx)
             }));
         Some(column(bar).pt(px(10.)).into_any_element())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::pinned_preview;
+    use crate::model::{Attachment, Message, Poll};
+
+    #[::core::prelude::v1::test]
+    fn pinned_bar_previews_the_pinned_message() {
+        let _guard = crate::i18n::scoped("fr");
+        let text = Message {
+            text: "Rendez-vous
+ à 8h".into(),
+            ..Message::default()
+        };
+        assert_eq!(pinned_preview(&text), "Rendez-vous à 8h");
+        let photo = Message {
+            attachments: vec![Attachment {
+                kind: "image".into(),
+                ..Attachment::default()
+            }],
+            ..Message::default()
+        };
+        assert_eq!(pinned_preview(&photo), "Photo");
+        let poll = Message {
+            poll: Some(Poll {
+                question: "Où dîner ?".into(),
+                ..Poll::default()
+            }),
+            ..Message::default()
+        };
+        assert_eq!(pinned_preview(&poll), "Où dîner ?");
+        let deleted = Message {
+            deleted: true,
+            ..text.clone()
+        };
+        assert_eq!(pinned_preview(&deleted), "Message retiré");
     }
 }

@@ -111,9 +111,7 @@ impl MissiveApp {
             keyword: keyword_matches(&self.settings.keywords, &text),
             priority: self
                 .settings
-                .priority_threads
-                .iter()
-                .any(|id| *id == message.thread_id),
+                .priority_threads.contains(&message.thread_id),
             quiet: quiet.enabled
                 && in_quiet_window(quiet.start_minutes, quiet.end_minutes, minutes),
         })

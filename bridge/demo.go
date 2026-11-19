@@ -148,10 +148,11 @@ func (d *DemoBackend) decorateDemo() {
 }
 
 type DemoBackend struct {
-	out     Emitter
-	log     zerolog.Logger
-	store   *Store
-	dataDir string
+	out      Emitter
+	log      zerolog.Logger
+	store    *Store
+	dataDir  string
+	cacheDir string
 
 	mu        sync.Mutex
 	rng       *rand.Rand
@@ -172,12 +173,16 @@ type DemoBackend struct {
 	archive   archiveJobs
 }
 
-func NewDemoBackend(dataDir string, out Emitter, log zerolog.Logger) *DemoBackend {
+func NewDemoBackend(dataDir, cacheDir string, out Emitter, log zerolog.Logger) *DemoBackend {
+	if cacheDir == "" {
+		cacheDir = dataDir
+	}
 	d := &DemoBackend{
 		out:       out,
 		log:       log,
 		store:     NewStore(),
 		dataDir:   dataDir,
+		cacheDir:  cacheDir,
 		rng:       rand.New(rand.NewPCG(42, uint64(time.Now().UnixNano()))),
 		loggedIn:  true,
 		user:      User{ID: "100004781234500", Name: "Moi Démo"},
@@ -187,7 +192,8 @@ func NewDemoBackend(dataDir string, out Emitter, log zerolog.Logger) *DemoBacken
 		pinAttempts: demoPINAttempts,
 		backfills:   make(map[string]bool),
 	}
-	d.avatars = newAvatarCache(dataDir, demoAvatarFetcher, nil)
+	d.avatars = newAvatarCache(cacheDir, demoAvatarFetcher, nil)
+	d.avatars.log = log
 	d.populate()
 	return d
 }
@@ -288,7 +294,7 @@ func (d *DemoBackend) populate() {
 	}
 	d.decorateDemo()
 	d.seedReceipts()
-	d.populateV11()
+	d.populateThreadSettings()
 }
 
 func snippetFor(msg Message) string {
@@ -383,7 +389,9 @@ func (d *DemoBackend) makeMessage(threadID string, e2ee bool, ts int64, outgoing
 			Height:      630,
 		}}
 	case roll == 7 && !outgoing:
-		msg.Text = ""
+		if ts%2 == 0 {
+			msg.Text = ""
+		}
 		msg.Deleted = true
 	case roll == 10:
 		msg.Text = ""
@@ -462,7 +470,7 @@ func (d *DemoBackend) Logout(ctx context.Context) error {
 		d.stopLoop = nil
 	}
 	d.mu.Unlock()
-	_ = os.RemoveAll(filepath.Join(d.dataDir, avatarDirName))
+	_ = os.RemoveAll(filepath.Join(d.cacheDir, avatarDirName))
 	if wasConnected {
 		d.out.Emit(EventConnection, ConnectionEvent{State: StateDisconnected, Detail: "logged out"})
 	}
@@ -480,7 +488,7 @@ func (d *DemoBackend) Connect(ctx context.Context) error {
 	}
 	loopCtx, cancel := context.WithCancel(context.Background())
 	d.stopLoop = cancel
-	go d.connectLoop(loopCtx)
+	goSafe(d.log, "demo_connect", func() { d.connectLoop(loopCtx) })
 	return nil
 }
 
@@ -603,7 +611,7 @@ func (d *DemoBackend) startBackfill(threadID string, e2ee bool, beforeMS int64, 
 		return
 	}
 	d.backfills[key] = true
-	go func() {
+	goSafe(d.log, "demo_backfill", func() {
 		time.Sleep(demoBackfillDelay)
 		d.mu.Lock()
 		delete(d.backfills, key)
@@ -625,7 +633,7 @@ func (d *DemoBackend) startBackfill(threadID string, e2ee bool, beforeMS int64, 
 		if len(fresh) > 0 {
 			d.out.Emit(EventBackfilled, MessagesBackfilledEvent{ThreadID: threadID, Messages: fresh})
 		}
-	}()
+	})
 }
 
 func (d *DemoBackend) generateOlder(threadID string, e2ee bool, want int) {
@@ -715,7 +723,7 @@ func (d *DemoBackend) Send(ctx context.Context, threadID, text, replyToID, clien
 	}
 	if len(members) > 0 {
 		reader := members[0]
-		go func() {
+		goSafe(d.log, "demo_read", func() {
 			time.Sleep(3 * time.Second)
 			d.mu.Lock()
 			connected := d.connected
@@ -723,7 +731,7 @@ func (d *DemoBackend) Send(ctx context.Context, threadID, text, replyToID, clien
 			if connected {
 				d.out.Emit(EventRead, ReadEvent{ThreadID: threadID, UserID: reader, TimestampMS: time.Now().UnixMilli()})
 			}
-		}()
+		})
 	}
 	return msg.ID, nil
 }

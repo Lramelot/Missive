@@ -3,7 +3,11 @@ use gpui_kit::assets::IconName;
 use gpui_kit::component::Icon;
 use gpui_kit::{prelude::FluentBuilder as _, *};
 
-use crate::{app::Link, style::Palette};
+use crate::{
+    app::Link,
+    style::Palette,
+    timefmt::{self, Day},
+};
 
 pub fn initials(name: &str) -> String {
     let mut out: String = name
@@ -223,78 +227,29 @@ pub fn link_label(link: Link, detail: Option<&SharedString>) -> SharedString {
     }
 }
 
-const WEEKDAY_KEYS: [&str; 7] = [
-    "common.weekday.mon",
-    "common.weekday.tue",
-    "common.weekday.wed",
-    "common.weekday.thu",
-    "common.weekday.fri",
-    "common.weekday.sat",
-    "common.weekday.sun",
-];
-const MONTH_KEYS: [&str; 12] = [
-    "common.month_short.jan",
-    "common.month_short.feb",
-    "common.month_short.mar",
-    "common.month_short.apr",
-    "common.month_short.may",
-    "common.month_short.jun",
-    "common.month_short.jul",
-    "common.month_short.aug",
-    "common.month_short.sep",
-    "common.month_short.oct",
-    "common.month_short.nov",
-    "common.month_short.dec",
-];
-const WEEKDAY_SHORT_KEYS: [&str; 7] = [
-    "widgets.weekday_short.mon",
-    "widgets.weekday_short.tue",
-    "widgets.weekday_short.wed",
-    "widgets.weekday_short.thu",
-    "widgets.weekday_short.fri",
-    "widgets.weekday_short.sat",
-    "widgets.weekday_short.sun",
-];
-
-fn weekday_long(index: usize) -> String {
-    let name = t!(WEEKDAY_KEYS[index]);
-    let mut chars = name.chars();
-    match chars.next() {
-        Some(first) => first.to_uppercase().chain(chars).collect(),
-        None => String::new(),
-    }
-}
-
-fn month_short(index: usize) -> String {
-    t!(MONTH_KEYS[index]).into_owned()
-}
-
 pub fn format_short(timestamp_ms: i64) -> SharedString {
     let Some(time) = Local.timestamp_millis_opt(timestamp_ms).single() else {
         return SharedString::default();
     };
     let now = Local::now();
     let minutes = (now - time).num_minutes();
-    let days = (now.date_naive() - time.date_naive()).num_days();
     let text = if (0..1).contains(&minutes) {
         t!("widgets.time.now").into_owned()
     } else if (1..60).contains(&minutes) {
         t!("widgets.time.minutes_ago", minutes = minutes).into_owned()
-    } else if days == 0 {
-        time.format("%H:%M").to_string()
-    } else if days == 1 {
-        t!("widgets.time.yesterday").into_owned()
-    } else if days < 7 {
-        t!(WEEKDAY_SHORT_KEYS[time.weekday().num_days_from_monday() as usize]).into_owned()
-    } else if time.year() == now.year() {
-        t!(
-            "widgets.date.day_month",
-            day = time.day(),
-            month = month_short(time.month0() as usize)
-        )
-        .into_owned()
     } else {
-        time.format("%d/%m/%y").to_string()
+        match timefmt::relative_day(time.date_naive(), now.date_naive()) {
+            Day::Today => timefmt::clock(&time),
+            Day::Yesterday => t!("widgets.time.yesterday").into_owned(),
+            Day::LastWeek(weekday) => timefmt::weekday_short(weekday).into_owned(),
+            _ if time.year() == now.year() => t!(
+                "widgets.date.day_month",
+                day = time.day(),
+                month = timefmt::month_short(time.month())
+            )
+            .into_owned(),
+            _ => timefmt::short_date(&time),
+        }
     };
     text.into()
 }
@@ -304,28 +259,27 @@ pub fn format_separator(timestamp_ms: i64) -> SharedString {
         return SharedString::default();
     };
     let now = Local::now();
-    let days = (now.date_naive() - time.date_naive()).num_days();
-    let clock = time.format("%H:%M").to_string();
-    let text = match days {
-        0 => t!("widgets.separator.today", clock = clock).into_owned(),
-        1 => t!("widgets.separator.yesterday", clock = clock).into_owned(),
-        2..=6 => t!(
+    let clock = timefmt::clock(&time);
+    let text = match timefmt::relative_day(time.date_naive(), now.date_naive()) {
+        Day::Today => t!("widgets.separator.today", clock = clock).into_owned(),
+        Day::Yesterday => t!("widgets.separator.yesterday", clock = clock).into_owned(),
+        Day::LastWeek(weekday) => t!(
             "widgets.separator.weekday",
-            weekday = weekday_long(time.weekday().num_days_from_monday() as usize),
+            weekday = timefmt::capitalized(&timefmt::weekday_name(weekday)),
             clock = clock
         )
         .into_owned(),
         _ if time.year() == now.year() => t!(
             "widgets.separator.day_month",
             day = time.day(),
-            month = month_short(time.month0() as usize),
+            month = timefmt::month_short(time.month()),
             clock = clock
         )
         .into_owned(),
         _ => t!(
             "widgets.separator.day_month_year",
             day = time.day(),
-            month = month_short(time.month0() as usize),
+            month = timefmt::month_short(time.month()),
             year = time.year(),
             clock = clock
         )

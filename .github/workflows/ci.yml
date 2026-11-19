@@ -33,6 +33,37 @@ jobs:
       - run: go test ./...
       - run: go build -o missive-bridge .
 
+  bridge-race:
+    runs-on: ubuntu-latest
+    env:
+      CGO_ENABLED: "1"
+    defaults:
+      run:
+        working-directory: bridge
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: bridge/go.mod
+          cache-dependency-path: bridge/go.sum
+      - run: go test -race ./...
+
+  bridge-windows:
+    runs-on: windows-latest
+    env:
+      CGO_ENABLED: "0"
+    defaults:
+      run:
+        working-directory: bridge
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: bridge/go.mod
+          cache-dependency-path: bridge/go.sum
+      - run: go vet ./...
+      - run: go test ./...
+
   app:
     strategy:
       fail-fast: false
@@ -42,8 +73,11 @@ jobs:
     steps:
       - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
       - uses: Swatinem/rust-cache@v2
         with:
           cache-on-failure: true
+      - run: cargo clippy --package missive --all-targets -- -D warnings
       - run: cargo test --package missive
       - run: cargo build --package missive

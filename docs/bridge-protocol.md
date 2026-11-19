@@ -13,26 +13,45 @@ line (UTF-8, `\n`-terminated)**. The bridge writes **only protocol lines to stdo
 ## Launch
 
 ```
-missive-bridge --data-dir <absolute path>
+missive-bridge --data-dir <absolute path> [--cache-dir <absolute path>]
 ```
 
 `--data-dir` holds everything the bridge persists (cookies, messagix state, whatsmeow SQLite device
-store). The bridge creates it if missing. The app uses `%APPDATA%\Missive\bridge` on Windows and
-`~/Library/Application Support/Missive/bridge` on macOS.
+store, message cache). The bridge creates it if missing. The app uses `%APPDATA%\Missive\bridge` on
+Windows and `~/Library/Application Support/Missive/bridge` on macOS.
+
+`--cache-dir` holds the re-creatable downloads: `media/` (with `media/thumbs/`) and `avatars/`. It
+defaults to `--data-dir` (older behaviour). The app passes `dirs::cache_dir()/Missive/cache`
+(`%LOCALAPPDATA%\Missive\cache` on Windows, so downloads stay out of the roaming profile;
+`cache-demo` in demo mode). At startup, when the two directories differ and `media/` or `avatars/`
+still exist under `--data-dir`, they are moved to `--cache-dir` (rename; if that fails, copy then
+delete; if the copy fails, they are left in place and the failure is logged). Paths recorded in the
+message cache are rewritten to the new location for every file that was moved. Secrets,
+`whatsmeow.db` and `cache.json` never leave `--data-dir`.
+
+At startup the bridge also trims, in the background, `media/thumbs/` and `avatars/` (together) to
+500 MB by deleting the least recently modified files. `media/` itself is never evicted automatically:
+encrypted media may no longer be downloadable from Meta.
 
 The bridge exits cleanly (disconnecting) when stdin reaches EOF.
 
 ### Data at rest
 
-| file in `--data-dir` | content | protection |
+| file | content | protection |
 |---|---|---|
-| `cookies.json` | Meta session cookies (`xs`, `c_user`, `datr`, …) | encrypted |
-| `session.json` | logged-in user, WhatsApp device id, secure-history device (enrollment keys) | encrypted |
-| `state.json` | messagix connection state (tokens needed to reconnect without reloading messenger.com) | encrypted |
-| `cache.json` | message cache (threads, messages, contacts, reactions) | encrypted |
-| `whatsmeow.db` (+ `-wal`, `-shm`) | whatsmeow SQLite device store: E2EE identity, Signal sessions, pre-keys, sender keys | **not encrypted** (see below) |
-| `media/`, `media/thumbs/` | downloaded attachments and thumbnails | not encrypted (opened directly by the app and the OS) |
-| `avatars/` | cached profile pictures | not encrypted |
+| `cookies.json` (data dir) | Meta session cookies (`xs`, `c_user`, `datr`, …) | encrypted |
+| `session.json` (data dir) | logged-in user, WhatsApp device id, secure-history device (enrollment keys) | encrypted |
+| `state.json` (data dir) | messagix connection state (tokens needed to reconnect without reloading messenger.com) | encrypted |
+| `cache.json` (data dir) | message cache (threads, messages, contacts, reactions); JSON with `"v": 1` (a file without `v` is read as version 1) | encrypted |
+| `whatsmeow.db` (+ `-wal`, `-shm`) (data dir) | whatsmeow SQLite device store: E2EE identity, Signal sessions, pre-keys, sender keys | **not encrypted** (see below) |
+| `media/`, `media/thumbs/` (cache dir) | downloaded attachments and thumbnails | not encrypted (opened directly by the app and the OS) |
+| `avatars/` (cache dir) | cached profile pictures | not encrypted |
+
+`session.json` and `cookies.json` are rewritten only when their content changes, and `cache.json` only
+when the store changed since the last save (checked every 30 s and at shutdown). The cache keeps the
+300 newest messages per thread; after `export_thread` or `save_media` the older messages that the
+export itself fetched are dropped from memory again, down to 300 messages, while every message known
+before the export is kept (older pages can be fetched again).
 
 - Windows: "encrypted" files start with the ASCII header `MISSIVE-DPAPI-1\n`, then a big-endian `uint32`
   length and a random 256-bit key wrapped by DPAPI (`CryptProtectData`, current user scope, no UI, fixed
@@ -54,8 +73,9 @@ The bridge exits cleanly (disconnecting) when stdin reaches EOF.
   driver, which has no page encryption). It is created by the bridge with `0600` before SQLite opens it
   (SQLite gives `-wal`/`-shm` the same mode); on Windows it relies on the ACL of the user profile
   (`%APPDATA%` is readable by the user, SYSTEM and administrators only).
-- `logout` deletes `cookies.json`, `session.json`, `state.json`, `cache.json`, the media and avatar caches,
-  and the WhatsApp device from `whatsmeow.db`.
+- `logout` deletes `cookies.json`, `session.json`, `state.json`, `cache.json`, the media and avatar caches
+  (in the cache dir), and the WhatsApp device from `whatsmeow.db`. Background work started for the
+  session (backfills, catch-ups, contact fetches, history uploads) is cancelled.
 
 ### Logs
 
@@ -248,7 +268,7 @@ Message {
   client_id?: string,      // echo of the `client_id` given to `send`/`send_media` for our own outgoing messages (live echo only)
   mentions: Mention[],     // people mentioned in `text`, [] when none (LS mention data and E2EE mentions)
   edited: bool,
-  deleted: bool,
+  deleted: bool,           // unsent for everyone; see "Deleted messages" below
   system: bool,            // admin/system line (renames, joins, leaves, theme/emoji/nickname changes, calls "Appel manqué", poll summaries…): `text` is the ready-to-display French sentence, rendered centered by the app; no reactions/reply actions
   forwarded: bool,         // the message was forwarded from another conversation
   poll?: Poll              // the message carries a poll (LS polls)
@@ -294,7 +314,27 @@ Attachment {
 }
 ```
 
+### Deleted messages
+
+`deleted: true` means the message was unsent for everyone (LS `IsUnsent`, encrypted revoke, my own
+`unsend`, demo). When the bridge already knew the message, its content is **kept**: `text`,
+`attachments`, `mentions` and `poll` stay as they were and only `deleted` flips to `true` (the app
+shows a "deleted" label above the content and offers no action on it). A later row from Meta that
+repeats the unsend with an empty text never erases the stored content, and a deleted message never
+becomes non-deleted again. A message that is already deleted when the bridge first sees it (history:
+Meta no longer sends its content) has `deleted: true` and an empty `text`. Exports render a deleted
+message with content as a "deleted" label followed by the content, and one without content as
+"Message removed". `delete_for_me` is different: the message disappears (`message_removed`). Global
+`search` and `media_history` skip deleted messages.
+
 ## Commands
+
+Requests run concurrently, at most 64 at a time (the others wait for a free slot, in order of
+arrival on each lane). `limit` values above 500 are lowered to 500 (`threads`, `messages`, `search`,
+`media_history`). When stdin closes, the bridge cancels the requests in flight first, waits up to
+10 s for them to answer, then shuts the backend down; a request still waiting for its lane or a slot
+fails with `internal` ("bridge is shutting down"). A panic while handling a request answers
+`internal` with the runtime error only (never message content).
 
 | cmd | params | result |
 |---|---|---|
@@ -314,9 +354,9 @@ Attachment {
 | `media_history` | `{thread_id: string, before_ms?: int, limit?: int, kinds?: string[], max_pages?: int}` (`max_pages` = how many Meta pages this call may fetch, default 10; `0` = answer from the store only, instantly) (default limit 60, kinds `["image","video"]`; also `"file"`, `"link"`, `"audio"`) | `{items: MediaItem[], has_more: bool}` newest first, strictly older than `before_ms`. Must reach the WHOLE history of the thread, not just the cache: when the store runs out it pages older history from Meta (LS FetchMessages / archive pages for E2EE, or a dedicated shared-media query if Meta has one) until `limit` items are found or history is exhausted. Fetched messages are stored as history (no `message` events). |
 | `history_status` | — | `{backup: "none" \| "available" \| "unknown", restored: bool}` — whether the account has an encrypted history backup (secure storage) and whether this bridge already restored it. Requires a connected session. |
 | `restore_history` | `{pin: string}` (6 digits) | `{}` once the backup is restored and its content applied to the store (threads/messages events are emitted for everything it changes). Errors: `bad_pin` (message carries the attempts Meta reports remaining, `data.attempts_remaining: int` when known), `pin_locked` (no attempts left), `unsupported` (no backup). The PIN is never logged nor persisted. |
-| `avatar` | `{url: string}` (a `User.avatar_url`, `Thread.avatar_url`, `member_avatars[]` or `ReadReceipt.avatar_url`) | `{path: string}` — local file, cached on disk under `<data-dir>/avatars/<sha256>.<ext>`; served from disk immediately when present (refreshed in the background if older than 7 days); same host allow-list and limits as media downloads. |
-| `media` (variant) | same params + `variant?: "full" \| "thumb"` (default `"full"`) | `"thumb"`: a small image (longest side ≤ 640 px, JPEG) suitable for bubbles and grids, cached under `<data-dir>/media/thumbs/`. Sources, fastest first: the inline JPEG thumbnail embedded in E2EE image/video/sticker/link messages (no network at all), the attachment's `thumbnail_url`, else download the full media and downscale it (pure Go decoders: jpeg, png, gif, webp). Works for `video` attachments (returns the poster image). Result also carries `width`, `height` of the returned file. |
-| `media` | `{thread_id: string, message_id: string, attachment_id: string}` | `{path: string, mime_type?: string}` — absolute path of the decrypted file, downloaded on first call into `<data-dir>/media/` and served from there afterwards. Works for E2EE (whatsmeow download + decrypt) and non-E2EE (plain download of `url`). `not_found` if the attachment is unknown, `unsupported` if the media expired on Meta's side. |
+| `avatar` | `{url: string}` (a `User.avatar_url`, `Thread.avatar_url`, `member_avatars[]` or `ReadReceipt.avatar_url`) | `{path: string}` — local file, cached on disk under `<cache-dir>/avatars/<sha256>.<ext>`; served from disk immediately when present (refreshed in the background if older than 7 days); same host allow-list and limits as media downloads. |
+| `media` (variant) | same params + `variant?: "full" \| "thumb"` (default `"full"`) | `"thumb"`: a small image (longest side ≤ 640 px, JPEG) suitable for bubbles and grids, cached under `<cache-dir>/media/thumbs/`. Sources, fastest first: the inline JPEG thumbnail embedded in E2EE image/video/sticker/link messages (no network at all), the attachment's `thumbnail_url`, else download the full media and downscale it (pure Go decoders: jpeg, png, gif, webp). Works for `video` attachments (returns the poster image). Result also carries `width`, `height` of the returned file. |
+| `media` | `{thread_id: string, message_id: string, attachment_id: string}` | `{path: string, mime_type?: string}` — absolute path of the decrypted file, downloaded on first call into `<cache-dir>/media/` and served from there afterwards. Works for E2EE (whatsmeow download + decrypt) and non-E2EE (plain download of `url`). `not_found` if the attachment is unknown, `unsupported` if the media expired on Meta's side. |
 
 ### Commands added in v1.1
 
@@ -329,7 +369,7 @@ ConsumerApplication message).
 | cmd | params | result |
 |---|---|---|
 | `edit_message` | `{thread_id, message_id, text}` — own, non-deleted, non-system text message; `text` non-empty | `{}`; the change comes back as `message_updated` with `edited: true`. LS `EditMessageTask`; E2EE edit message. Meta refuses edits older than 15 min: `bad_request` with a clear message. |
-| `unsend` | `{thread_id, message_id}` — own message | `{}`; `message_updated` with `deleted: true`, `text: ""`, `attachments: []`. LS `DeleteMessageTask`; E2EE revoke. |
+| `unsend` | `{thread_id, message_id}` — own, not yet deleted message | `{}`; `message_updated` with `deleted: true`, content kept (see "Deleted messages"). LS `DeleteMessageTask`; E2EE revoke. |
 | `delete_for_me` | `{thread_id, message_id}` | `{}`; removed from the store, then a `message_removed` event. LS `DeleteMessageMeOnlyTask`; E2EE: local only. |
 | `forward` | `{from_thread_id, message_id, to_thread_ids: string[]}` (1–10 targets) | `{message_ids: string[]}` (one per target, `""` when unknown). LS→LS: `SendMessageTask` with `ForwardedMsgId`. Any E2EE side: re-send the text and re-upload the media (download from source first). Targets receive normal `message` echoes. |
 | `send_voice` | `{thread_id, path, duration_ms, client_id?, reply_to_id?}` — `path` = WAV, PCM 16-bit, mono, 16 or 48 kHz, recorded by the app | `{message_id?: string}`; sent as a voice message (LS voice clip / E2EE PTT audio), transcoded by the bridge to the format Messenger plays (pure Go, no ffmpeg); echo like `send` with `client_id`. |
@@ -360,7 +400,7 @@ Bridge clarifications (v1.1, behaviour as implemented):
 - `set_admin` additionally requires `is_admin: true`. After `leave_thread` (or `remove_participant` with my own id) the group stays listed with its history and `can_manage: false`, even when Meta's answer or a later sync reports my removal (mautrix-meta deletes the room instead); being added back makes it manageable again. Commands never re-create a thread that Meta's answer removed.
 - `delete_for_me` on an encrypted message is local only. An LS delete-for-me row coming from Meta (another device) also produces `message_removed`; unsend for everyone keeps the message with `deleted: true`. An encrypted unsend is also uploaded to the secure history backup (as mautrix-meta does); edits are not.
 - `edit_message` (LS): when Meta answers with a different text and does not correct it within 5 s, Meta's version is kept and the command fails with `edit_rejected` (the app shows its own translated message; the bridge's `message` is English, for logs only).
-- Incoming encrypted edits and revokes only apply to a message of the same conversation sent by the editor (message key resolved like mautrix-meta: chat + sender + id); in groups an admin may also revoke someone else's message.
+- Incoming encrypted edits and revokes only apply to a message of the same conversation sent by the editor (message key resolved like mautrix-meta: chat + sender + id); in groups an admin may also revoke someone else's message. Like mautrix-meta's `waKeyToMessageID`, the key's `remoteJID` is only compared with the conversation when it is a group JID: in a one-to-one chat the key is built from the sender's side, so the peer revoking or editing their own message sends my JID as `remoteJID`.
 - System lines: LS admin messages (`IsAdminMessage`) and call logs become `system: true` messages; common English admin sentences are translated to French, others are passed through. Call logs carry no attachment. Poll vote events are folded into the poll (`message_updated` of the poll message); when Meta attaches a sentence to the vote it is also kept as a system line.
 - `forward`: LS→LS uses `SendMessageTask` with `ForwardedMsgId` (plus the read-watermark task mautrix-meta sends with every message); any other combination re-sends the text and re-uploads image/video/audio/file attachments (links, stickers-by-id, polls and system lines are not forwardable → `bad_request`). A target whose text went out but whose attachment failed reports the text message id; a target where nothing went out yields `""`; the command fails only when every target failed. Forwards are serialized with the other sends to the same target threads.
 - `open_thread` with a known group thread id → `bad_request`. `create_group`: when Meta does not return the new thread key, the bridge looks for the new group in the following sync for 5 s; otherwise it fails with `internal` and `data.uncertain: true` (the group may have been created).
@@ -399,7 +439,10 @@ Clarifications (v1.2 implementation):
 - `connected`: same as `status.connected`. `e2ee_ready`: the WhatsApp (E2EE) socket is connected and
   logged in (demo: `true` once connected).
 - `threads` / `messages`: counts in the local store (messages loaded in memory, all threads).
-- `data_dir_size_bytes`: total size of the regular files under `--data-dir` (media and avatars included).
+- `data_dir_size_bytes`: total size of the regular files under `--data-dir` (media and avatars included
+  only when `--cache-dir` is the data dir).
+- `cache_dir_size_bytes`: total size of the regular files under `--cache-dir` when it differs from
+  `--data-dir`, else `0` (already counted in `data_dir_size_bytes`).
 - `last_errors`: the last 20 log lines of level warn or above (oldest first), already redacted like the
   logs, formatted `<RFC3339 time> <level> <component>: <message>: <error>`. Requests that fail with
   `internal` are logged at warn and therefore appear here. Always an array (possibly empty).
@@ -416,7 +459,7 @@ On startup, if a session is persisted, the bridge loads it but **does not connec
 
 | event | data |
 |---|---|
-| `connection` | `{state: "connecting" \| "connected" \| "disconnected" \| "error", detail?: string, permanent?: bool}` — `permanent: true` means the session is invalid and the user must log in again |
+| `connection` | `{state: "connecting" \| "connected" \| "disconnected" \| "error", detail?: string, permanent?: bool}` — `permanent: true` means the session is invalid and the user must log in again. A transient connection failure never ends the loop: the bridge emits `connecting` with `detail: "retry N"` (N = retry number) and tries again after an exponential backoff (2 s, 4 s, … capped at 5 min, ±20 % jitter, never above 5 min), without limit. Permanent errors (checkpoint, challenge, consent, suspended account, unknown messenger.com version) emit `error` and stop; an invalidated session emits `error` with `permanent: true`. The encrypted (WhatsApp) socket retries the same way (10 s, 20 s, … capped at 10 min) and no longer gives up after repeated failures; its retries emit no `connection` event. |
 | `threads` | `{threads: Thread[]}` — upsert: new or changed threads |
 | `thread_removed` | `{thread_id: string}` |
 | `message` | `Message` — new incoming or outgoing message (including echo of our own sends) |

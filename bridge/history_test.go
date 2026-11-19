@@ -200,7 +200,7 @@ func TestRestoreHistoryAppliesArchive(t *testing.T) {
 		t.Fatalf("second restore must reuse the enrollment: %v enrolls=%d", err, fake.enrolls.Load())
 	}
 
-	reloaded, err := NewMetaBackend(dir, NewOutput(&syncBuffer{}, zerolog.Nop()), zerolog.Nop())
+	reloaded, err := NewMetaBackend(dir, "", NewOutput(&syncBuffer{}, zerolog.Nop()), zerolog.Nop())
 	if err == nil {
 		defer reloaded.Close()
 		if !reloaded.historyEnrolled() {
@@ -355,5 +355,23 @@ func TestDemoHistoryProtocol(t *testing.T) {
 	h.send(`{"id":200,"cmd":"restore_history","params":{"pin":"123456"}}`)
 	if code := h.errCode(200); code != CodePINLocked {
 		t.Fatalf("locked demo must stay locked, got %s", code)
+	}
+}
+
+func TestUnconfirmedEnrollmentIsNotRedone(t *testing.T) {
+	fake := &fakeHistory{}
+	b, _, _ := newHistoryBackend(t, fake)
+	b.mu.Lock()
+	b.sess.HistoryDevice = &securehistory.Device{BackupID: "backup-1"}
+	b.mu.Unlock()
+	err := b.RestoreHistory(context.Background(), testPIN)
+	if err == nil {
+		t.Fatal("restore over an unconfirmed enrollment must fail")
+	}
+	if body := toErrorBody(err); body.Code != CodeInternal || body.Message != "history enrollment unconfirmed" {
+		t.Fatalf("unexpected %+v", body)
+	}
+	if fake.enrolls.Load() != 0 {
+		t.Fatal("must never enroll twice")
 	}
 }

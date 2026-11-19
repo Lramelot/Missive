@@ -67,10 +67,12 @@ func (b *MetaBackend) SearchFiltered(ctx context.Context, f SearchFilter, limit 
 }
 
 func (b *MetaBackend) ExportThread(ctx context.Context, p ExportThreadParams) (ExportThreadResult, error) {
+	defer b.store.TrimThread(p.ThreadID, maxPersistedMessagesPerThread, b.store.MessageIDs(p.ThreadID))
 	return exportThread(ctx, b, p)
 }
 
 func (b *MetaBackend) SaveMedia(ctx context.Context, p SaveMediaParams) (SaveMediaResult, error) {
+	defer b.store.TrimThread(p.ThreadID, maxPersistedMessagesPerThread, b.store.MessageIDs(p.ThreadID))
 	return saveThreadMedia(ctx, b, p)
 }
 

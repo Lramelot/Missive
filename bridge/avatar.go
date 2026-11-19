@@ -13,6 +13,8 @@ import (
 	"strconv"
 	"sync"
 	"time"
+
+	"github.com/rs/zerolog"
 )
 
 const (
@@ -37,12 +39,14 @@ type avatarCache struct {
 	dir     string
 	fetch   avatarFetcher
 	valid   func() func() bool
+	parent  func() context.Context
+	log     zerolog.Logger
 	flights sync.Map
 	failed  sync.Map
 }
 
-func newAvatarCache(dataDir string, fetch avatarFetcher, valid func() func() bool) *avatarCache {
-	return &avatarCache{dir: filepath.Join(dataDir, avatarDirName), fetch: fetch, valid: valid}
+func newAvatarCache(cacheDir string, fetch avatarFetcher, valid func() func() bool) *avatarCache {
+	return &avatarCache{dir: filepath.Join(cacheDir, avatarDirName), fetch: fetch, valid: valid, log: zerolog.Nop()}
 }
 
 func httpAvatarFetcher(ctx context.Context, rawURL string, f *os.File) (string, error) {
@@ -122,18 +126,28 @@ func (c *avatarCache) start(key, rawURL string) *avatarFlight {
 	if c.valid != nil {
 		stillValid = c.valid()
 	}
-	go func() {
-		ctx, cancel := context.WithTimeout(context.Background(), avatarTimeout)
+	parent := context.Background()
+	if c.parent != nil {
+		parent = c.parent()
+	}
+	goSafe(c.log, "avatar", func() {
+		defer func() {
+			if flight.path == "" && flight.err == nil {
+				flight.err = errors.New("avatar download aborted")
+			}
+			c.flights.Delete(key)
+			close(flight.done)
+		}()
+		ctx, cancel := context.WithTimeout(parent, avatarTimeout)
 		defer cancel()
 		flight.path, flight.err = c.download(ctx, key, rawURL, stillValid)
-		if flight.err != nil {
-			c.failed.Store(rawURL, time.Now())
-		} else {
+		switch {
+		case flight.err == nil:
 			c.failed.Delete(rawURL)
+		case !errors.Is(flight.err, context.Canceled):
+			c.failed.Store(rawURL, time.Now())
 		}
-		c.flights.Delete(key)
-		close(flight.done)
-	}()
+	})
 	return flight
 }
 

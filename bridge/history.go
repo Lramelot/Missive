@@ -396,7 +396,7 @@ func (b *MetaBackend) applyHistory(ctx context.Context, svc historyService, thre
 	beforeMS := time.Now().Add(historyFutureSlack).UnixMilli()
 	for w := 0; w < historyWorkers; w++ {
 		wg.Add(1)
-		go func() {
+		goSafe(b.log, "history_worker", func() {
 			defer wg.Done()
 			for rec := range jobs {
 				n, err := b.fetchHistoryPage(ctx, svc, rec, beforeMS, historyPageSize)
@@ -409,7 +409,7 @@ func (b *MetaBackend) applyHistory(ctx context.Context, svc historyService, thre
 				}
 				mu.Unlock()
 			}
-		}()
+		})
 	}
 	for _, rec := range threads {
 		select {

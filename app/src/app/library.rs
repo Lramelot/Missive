@@ -5,7 +5,7 @@ use gpui_kit::component::input::{InputEvent, InputState};
 use gpui_kit::*;
 use serde_json::{Value, json};
 
-use super::{Gallery, GalleryTab, Lightbox, Media, MissiveApp, Older, Switcher};
+use super::{Gallery, GalleryTab, Lightbox, Media, MissiveApp, Switcher};
 use crate::model::{MediaPage, MediaResult, Message, SearchHit};
 
 pub(crate) const OLDER_PAGE: usize = 60;
@@ -15,6 +15,27 @@ const SEARCH_LIMIT: usize = 80;
 const ZOOM_STEP: f32 = 1.25;
 const MAX_ZOOM_PERCENT: f32 = 4.;
 const WHEEL_LINE: f32 = 40.;
+
+pub(crate) fn older_page_before(oldest: i64) -> i64 {
+    oldest.saturating_add(1)
+}
+
+pub(crate) fn older_page_additions(
+    existing: &[Message],
+    page: Vec<Message>,
+    oldest: i64,
+) -> (Vec<Message>, bool) {
+    let anything_older = page.iter().any(|message| message.timestamp_ms < oldest);
+    let mut seen: std::collections::HashSet<String> =
+        existing.iter().map(|message| message.id.clone()).collect();
+    let mut added: Vec<Message> = page
+        .into_iter()
+        .filter(|message| message.timestamp_ms <= oldest && seen.insert(message.id.clone()))
+        .collect();
+    added.sort_by_key(|message| message.timestamp_ms);
+    let reached_start = added.is_empty() && !anything_older;
+    (added, reached_start)
+}
 
 pub(crate) struct Viewer {
     pub(crate) zoom: f32,
@@ -611,11 +632,10 @@ impl MissiveApp {
             let label = t!("library.chip.before", date = bound.raw).to_string();
             push(SearchField::Before, label, !bound.is_valid());
         }
-        if search.sender_outside {
-            if let Some(chip) = chips.iter_mut().find(|chip| chip.field == SearchField::From) {
+        if search.sender_outside
+            && let Some(chip) = chips.iter_mut().find(|chip| chip.field == SearchField::From) {
                 chip.warning = true;
             }
-        }
         chips
     }
 
@@ -713,7 +733,7 @@ impl MissiveApp {
             let result = bridge
                 .call::<Vec<Message>>(
                     "messages",
-                    json!({ "thread_id": thread_id, "before_ms": oldest, "limit": OLDER_PAGE }),
+                    json!({ "thread_id": thread_id, "before_ms": older_page_before(oldest), "limit": OLDER_PAGE }),
                 )
                 .await;
             let _ = this.update(cx, |this, cx| {
@@ -742,37 +762,30 @@ impl MissiveApp {
         result: anyhow::Result<Vec<Message>>,
         cx: &mut Context<Self>,
     ) -> Option<usize> {
-        self.older
-            .entry(thread_id.to_string())
-            .or_insert_with(Older::default)
-            .loading = false;
+        self.older.entry(thread_id.to_string()).or_default().loading = false;
         if self.generation(thread_id) != generation || !self.messages.contains_key(thread_id) {
             return None;
         }
-        let mut older = match result {
-            Ok(older) => older,
+        let page = match result {
+            Ok(page) => page,
             Err(err) => {
                 self.set_error(err.context(t!("library.history_unavailable")));
                 cx.notify();
                 return None;
             }
         };
-        let known: std::collections::HashSet<String> = self
-            .messages
-            .get(thread_id)
-            .map(|list| list.iter().map(|m| m.id.clone()).collect())
-            .unwrap_or_default();
-        older.retain(|message| message.timestamp_ms < oldest && !known.contains(&message.id));
-        older.sort_by_key(|message| message.timestamp_ms);
+        let (mut older, reached_start) = older_page_additions(
+            self.messages.get(thread_id).map(Vec::as_slice).unwrap_or_default(),
+            page,
+            oldest,
+        );
         let count = older.len();
-        if count == 0 {
-            self.older
-                .entry(thread_id.to_string())
-                .or_insert_with(Older::default)
-                .exhausted = true;
-        } else {
+        if reached_start {
+            self.older.entry(thread_id.to_string()).or_default().exhausted = true;
+        }
+        if count > 0 {
             if let Some(list) = self.messages.get_mut(thread_id) {
-                older.extend(list.drain(..));
+                older.append(list);
                 *list = older;
             }
             if self.selected.as_deref() == Some(thread_id) {
@@ -884,12 +897,11 @@ impl MissiveApp {
 
     pub(crate) fn move_switcher(&mut self, delta: isize, cx: &mut Context<Self>) {
         let count = self.switcher_results(cx).len();
-        if let Some(switcher) = self.switcher.as_mut() {
-            if count > 0 {
+        if let Some(switcher) = self.switcher.as_mut()
+            && count > 0 {
                 let next = (switcher.selected as isize + delta).rem_euclid(count as isize);
                 switcher.selected = next as usize;
             }
-        }
         cx.notify();
     }
 
@@ -1245,17 +1257,26 @@ impl MissiveApp {
     }
 
     pub(crate) fn copy_lightbox_image(&mut self, cx: &mut Context<Self>) {
-        self.with_lightbox_file(cx, |this, path, cx| {
-            let image = std::fs::read(&path).ok().and_then(|bytes| {
-                sniff_image_format(&bytes, &path).map(|format| Image::from_bytes(format, bytes))
-            });
-            match image {
-                Some(image) => {
-                    cx.write_to_clipboard(ClipboardItem::new_image(&image));
-                    this.show_toast(t!("library.lightbox.copied"), cx);
-                }
-                None => this.show_toast(t!("library.lightbox.copy_failed"), cx),
-            }
+        self.with_lightbox_file(cx, |_, path, cx| {
+            cx.spawn(async move |this, cx| {
+                let image = cx
+                    .background_executor()
+                    .spawn(async move {
+                        std::fs::read(&path).ok().and_then(|bytes| {
+                            sniff_image_format(&bytes, &path)
+                                .map(|format| Image::from_bytes(format, bytes))
+                        })
+                    })
+                    .await;
+                let _ = this.update(cx, |this, cx| match image {
+                    Some(image) => {
+                        cx.write_to_clipboard(ClipboardItem::new_image(&image));
+                        this.show_toast(t!("library.lightbox.copied"), cx);
+                    }
+                    None => this.show_toast(t!("library.lightbox.copy_failed"), cx),
+                });
+            })
+            .detach();
         });
     }
 
@@ -1267,35 +1288,48 @@ impl MissiveApp {
             .and_then(|(_, attachment)| attachment.file_name.clone())
             .filter(|name| !name.trim().is_empty());
         self.with_lightbox_file(cx, move |_, source, cx| {
-            let extension = source
-                .extension()
-                .map(|ext| ext.to_string_lossy().into_owned())
-                .or_else(|| {
-                    std::fs::read(&source)
-                        .ok()
-                        .and_then(|bytes| sniff_image_format(&bytes, &source))
-                        .map(|format| image_extension(format).to_string())
-                })
-                .unwrap_or_else(|| "jpg".into());
-            let name = match suggested {
-                Some(name) => with_extension(PathBuf::from(name), &extension)
-                    .to_string_lossy()
-                    .into_owned(),
-                None => format!(
-                    "Missive {}.{extension}",
-                    chrono::Local::now().format("%Y-%m-%d %H%M%S")
-                ),
-            };
-            let directory = dirs::picture_dir()
-                .or_else(dirs::download_dir)
-                .or_else(dirs::home_dir)
-                .unwrap_or_default();
-            let receiver = cx.prompt_for_new_path(&directory, Some(&name));
             cx.spawn(async move |this, cx| {
+                let probe = source.clone();
+                let extension = cx
+                    .background_executor()
+                    .spawn(async move {
+                        probe
+                            .extension()
+                            .map(|ext| ext.to_string_lossy().into_owned())
+                            .or_else(|| {
+                                std::fs::read(&probe)
+                                    .ok()
+                                    .and_then(|bytes| sniff_image_format(&bytes, &probe))
+                                    .map(|format| image_extension(format).to_string())
+                            })
+                            .unwrap_or_else(|| "jpg".into())
+                    })
+                    .await;
+                let name = match suggested {
+                    Some(name) => with_extension(PathBuf::from(name), &extension)
+                        .to_string_lossy()
+                        .into_owned(),
+                    None => format!(
+                        "Missive {}.{extension}",
+                        chrono::Local::now().format("%Y-%m-%d %H%M%S")
+                    ),
+                };
+                let directory = dirs::picture_dir()
+                    .or_else(dirs::download_dir)
+                    .or_else(dirs::home_dir)
+                    .unwrap_or_default();
+                let Ok(receiver) =
+                    this.update(cx, |_, cx| cx.prompt_for_new_path(&directory, Some(&name)))
+                else {
+                    return;
+                };
                 let Ok(Ok(Some(target))) = receiver.await else {
                     return;
                 };
-                let copied = std::fs::copy(&source, &target);
+                let copied = cx
+                    .background_executor()
+                    .spawn(async move { std::fs::copy(&source, &target) })
+                    .await;
                 let _ = this.update(cx, |this, cx| match copied {
                     Ok(_) => this.show_toast(t!("library.lightbox.saved"), cx),
                     Err(_) => this.show_toast(t!("library.lightbox.save_failed"), cx),
@@ -1880,11 +1914,10 @@ pub(crate) fn best_match<'a, T>(
     }
     let mut best: Option<(u8, T)> = None;
     for (name, value) in candidates {
-        if let Some(score) = match_score(name, &wanted) {
-            if best.as_ref().is_none_or(|(current, _)| score < *current) {
+        if let Some(score) = match_score(name, &wanted)
+            && best.as_ref().is_none_or(|(current, _)| score < *current) {
                 best = Some((score, value));
             }
-        }
     }
     best.map(|(_, value)| value)
 }
@@ -1977,9 +2010,58 @@ mod tests {
         highlight_ranges, image_extension, parse_period, parse_query, rank_people,
         sniff_image_format, with_extension, zoom_about, zoom_limits,
     };
+    use super::{older_page_additions, older_page_before};
+    use crate::model::Message;
 
     fn day(y: i32, m: u32, d: u32) -> NaiveDate {
         NaiveDate::from_ymd_opt(y, m, d).unwrap()
+    }
+
+    fn message(id: &str, timestamp_ms: i64) -> Message {
+        Message {
+            id: id.into(),
+            timestamp_ms,
+            ..Message::default()
+        }
+    }
+
+    fn ids(messages: &[Message]) -> Vec<&str> {
+        messages.iter().map(|message| message.id.as_str()).collect()
+    }
+
+    #[::core::prelude::v1::test]
+    fn older_page_keeps_messages_sharing_the_oldest_millisecond() {
+        assert_eq!(older_page_before(1_000), 1_001);
+        let existing = vec![message("known", 1_000), message("newer", 2_000)];
+        let page = vec![
+            message("before", 900),
+            message("same-ms", 1_000),
+            message("known", 1_000),
+            message("before", 900),
+        ];
+        let (added, reached_start) = older_page_additions(&existing, page, 1_000);
+        assert_eq!(ids(&added), vec!["before", "same-ms"]);
+        assert!(!reached_start);
+    }
+
+    #[::core::prelude::v1::test]
+    fn duplicates_only_page_does_not_exhaust_history() {
+        let existing = vec![message("a", 500), message("b", 1_000)];
+        let (added, reached_start) =
+            older_page_additions(&existing, vec![message("a", 400)], 500);
+        assert!(added.is_empty());
+        assert!(!reached_start);
+    }
+
+    #[::core::prelude::v1::test]
+    fn history_is_exhausted_only_when_nothing_older_comes_back() {
+        let existing = vec![message("a", 500)];
+        let (added, reached_start) = older_page_additions(&existing, Vec::new(), 500);
+        assert!(added.is_empty());
+        assert!(reached_start);
+        let (_, reached_start) =
+            older_page_additions(&existing, vec![message("a", 500)], 500);
+        assert!(reached_start);
     }
 
     fn close(a: f32, b: f32) -> bool {

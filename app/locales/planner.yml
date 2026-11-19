@@ -90,6 +90,12 @@ app:
     not_found:
       en: "Item not found. It may have been deleted."
       fr: "Élément introuvable, il a peut-être été supprimé."
+    timeout:
+      en: "The Messenger bridge did not answer in time. Please try again."
+      fr: "Le bridge Messenger n'a pas répondu à temps. Réessayez."
+    bridge_stopped:
+      en: "The Messenger bridge stopped before finishing this action."
+      fr: "Le bridge Messenger s'est arrêté avant la fin de cette action."
   preview:
     outgoing:
       en: "You: %{body}"
@@ -161,7 +167,7 @@ planner:
       fr: "le %{day} %{month} %{year} à %{clock}"
   picker:
     invalid_date:
-      en: "Invalid date: use DD/MM/YYYY."
+      en: "Invalid date: use MM/DD/YYYY."
       fr: "Date invalide : utilisez JJ/MM/AAAA."
     invalid_time:
       en: "Invalid time: use HH:MM."
@@ -173,7 +179,7 @@ planner:
       en: "Pick a date within the next year."
       fr: "Choisissez une date dans moins d'un an."
     date_placeholder:
-      en: "DD/MM/YYYY"
+      en: "MM/DD/YYYY"
       fr: "JJ/MM/AAAA"
     time_placeholder:
       en: "HH:MM"

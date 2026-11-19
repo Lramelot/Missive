@@ -322,3 +322,20 @@ func decorated(s *Store, threadID, messageID string) (Message, bool) {
 	m, ok := s.MessageInThread(threadID, messageID)
 	return s.Decorate(m), ok
 }
+
+func TestSetActive(t *testing.T) {
+	h := newDemoHarness(t)
+	h.send(`{"id":1,"cmd":"set_active","params":{"active":true}}`, `{"id":2,"cmd":"set_active","params":{}}`)
+	h.okResult(1, nil)
+	if code := h.errCode(2); code != CodeBadRequest {
+		t.Fatalf("got %s", code)
+	}
+	b, _, _ := loggedInBackend(t)
+	if b.active.Load() {
+		t.Fatal("must start inactive")
+	}
+	b.SetActive(context.Background(), true)
+	if !b.active.Load() {
+		t.Fatal("set_active not stored")
+	}
+}

@@ -19,6 +19,7 @@ mod notifications;
 mod settings;
 mod storage;
 mod style;
+mod timefmt;
 mod updates;
 mod views;
 

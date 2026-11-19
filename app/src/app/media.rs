@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::{collections::HashSet, path::PathBuf};
 
 use gpui_kit::*;
 use serde_json::json;
@@ -45,12 +45,51 @@ impl MediaJob {
     }
 }
 
+#[derive(Default)]
+pub(crate) struct MediaQueue {
+    jobs: Vec<MediaJob>,
+    queued: HashSet<String>,
+}
+
+impl MediaQueue {
+    pub(crate) fn push(&mut self, job: MediaJob) -> bool {
+        if !self.queued.insert(job.key()) {
+            return false;
+        }
+        self.jobs.push(job);
+        true
+    }
+
+    pub(crate) fn pop(&mut self) -> Option<MediaJob> {
+        let job = self.jobs.pop()?;
+        self.queued.remove(&job.key());
+        Some(job)
+    }
+
+    pub(crate) fn is_empty(&self) -> bool {
+        self.jobs.is_empty()
+    }
+}
+
 pub(crate) fn thumb_key(message_id: &str, attachment_id: &str) -> String {
     format!("{message_id}/{attachment_id}#thumb")
 }
 
 pub(crate) fn avatar_key(url: &str) -> String {
     format!("avatar:{url}")
+}
+
+fn media_state_after(result: anyhow::Result<MediaResult>) -> Option<Media> {
+    match result {
+        Ok(media) => Some(Media::Ready(PathBuf::from(media.path))),
+        Err(err) if transient_failure(&err) => None,
+        Err(_) => Some(Media::Failed),
+    }
+}
+
+fn transient_failure(err: &anyhow::Error) -> bool {
+    err.downcast_ref::<crate::bridge::BridgeError>()
+        .is_some_and(|error| matches!(error.code.as_str(), "timeout" | "bridge_stopped"))
 }
 
 fn http_source(url: &str) -> Option<ImageSource> {
@@ -60,10 +99,7 @@ fn http_source(url: &str) -> Option<ImageSource> {
 
 impl MissiveApp {
     fn enqueue(&self, job: MediaJob) {
-        let mut queue = self.media_queue.borrow_mut();
-        if !queue.contains(&job) {
-            queue.push(job);
-        }
+        self.media_queue.borrow_mut().push(job);
     }
 
     fn state(&self, key: &str) -> Option<&Media> {
@@ -114,11 +150,10 @@ impl MissiveApp {
         message: &Message,
         attachment: &Attachment,
     ) -> Option<ImageSource> {
-        if attachment.kind == "image" {
-            if let Some(source) = attachment.url.as_deref().and_then(http_source) {
+        if attachment.kind == "image"
+            && let Some(source) = attachment.url.as_deref().and_then(http_source) {
                 return Some(source);
             }
-        }
         let key = super::media_key(&message.id, &attachment.id);
         match self.state(&key) {
             Some(Media::Ready(path)) => Some(path.clone().into()),
@@ -225,14 +260,17 @@ impl MissiveApp {
                 let result = bridge.call::<MediaResult>(cmd, params).await;
                 let _ = this.update(cx, |this, cx| {
                     this.media_in_flight = this.media_in_flight.saturating_sub(1);
-                    let state = match result {
-                        Ok(media) => Media::Ready(PathBuf::from(media.path)),
-                        Err(err) => {
-                            eprintln!("[app] {cmd} failed: {err:#}");
-                            Media::Failed
+                    if let Err(err) = &result {
+                        eprintln!("[app] {cmd} failed: {err:#}");
+                    }
+                    match media_state_after(result) {
+                        Some(state) => {
+                            this.media.insert(key, state);
                         }
-                    };
-                    this.media.insert(key, state);
+                        None => {
+                            this.media.remove(&key);
+                        }
+                    }
                     if let Some((thread_id, message_id)) = remeasure {
                         this.remeasure_message(&thread_id, &message_id, cx);
                     }
@@ -341,6 +379,7 @@ impl MissiveApp {
         message_id: &str,
         cx: &mut Context<Self>,
     ) {
+        self.messages.touch(thread_id);
         if self.selected.as_deref() != Some(thread_id) {
             return;
         }
@@ -354,5 +393,59 @@ impl MissiveApp {
         self.scroller.update(cx, |scroller, cx| {
             scroller.remeasure_items(index..index + 1, cx)
         });
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{MediaJob, MediaQueue, media_state_after};
+    use crate::{app::Media, bridge::BridgeError, model::MediaResult};
+
+    fn failure(code: &str) -> anyhow::Result<MediaResult> {
+        Err(anyhow::Error::new(BridgeError {
+            code: code.into(),
+            message: String::new(),
+            data: None,
+        }))
+    }
+
+    #[::core::prelude::v1::test]
+    fn media_lost_to_a_timeout_or_a_bridge_restart_is_asked_again() {
+        assert!(media_state_after(failure("bridge_stopped")).is_none());
+        assert!(media_state_after(failure("timeout")).is_none());
+        assert!(matches!(media_state_after(failure("not_found")), Some(Media::Failed)));
+        assert!(matches!(
+            media_state_after(Err(anyhow::anyhow!("other"))),
+            Some(Media::Failed)
+        ));
+        assert!(matches!(
+            media_state_after(Ok(MediaResult { path: "a.jpg".into() })),
+            Some(Media::Ready(path)) if path == std::path::Path::new("a.jpg")
+        ));
+    }
+
+    fn thumb(message_id: &str) -> MediaJob {
+        MediaJob::Thumb {
+            thread_id: "t".into(),
+            message_id: message_id.into(),
+            attachment_id: "a".into(),
+        }
+    }
+
+    #[::core::prelude::v1::test]
+    fn queue_ignores_duplicates_until_the_job_is_taken() {
+        let mut queue = MediaQueue::default();
+        assert!(queue.push(thumb("m1")));
+        assert!(!queue.push(thumb("m1")));
+        assert!(queue.push(thumb("m2")));
+        assert!(queue.push(MediaJob::Avatar { url: "https://x/a.jpg".into() }));
+        assert!(!queue.push(MediaJob::Avatar { url: "https://x/a.jpg".into() }));
+        let mut taken = Vec::new();
+        while let Some(job) = queue.pop() {
+            taken.push(job);
+        }
+        assert_eq!(taken.len(), 3);
+        assert!(queue.is_empty());
+        assert!(queue.push(thumb("m1")));
     }
 }

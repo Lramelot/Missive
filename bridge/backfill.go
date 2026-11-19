@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"math"
-	"strconv"
 	"time"
 )
 
@@ -15,19 +14,30 @@ const (
 )
 
 func (b *MetaBackend) startBackfill(rec threadRec, beforeMS int64, want int) {
-	key := rec.ID + "|" + strconv.FormatInt(beforeMS, 10)
+	key := rec.ID + "|older"
 	if _, running := b.backfills.LoadOrStore(key, true); running {
 		return
 	}
 	gen := b.generation()
-	go func() {
-		defer b.backfills.Delete(key)
-		b.backfillSem <- struct{}{}
-		defer func() { <-b.backfillSem }()
-		ctx, cancel := context.WithTimeout(context.Background(), backfillTimeout)
-		defer cancel()
+	b.runLimited(key, "backfill", func(ctx context.Context) {
 		b.runBackfill(ctx, rec, beforeMS, want, gen)
-	}()
+	})
+}
+
+func (b *MetaBackend) runLimited(key, name string, job func(ctx context.Context)) {
+	life := b.lifeCtx()
+	goSafe(b.log, name, func() {
+		defer b.backfills.Delete(key)
+		select {
+		case b.backfillSem <- struct{}{}:
+		case <-life.Done():
+			return
+		}
+		defer func() { <-b.backfillSem }()
+		ctx, cancel := context.WithTimeout(life, backfillTimeout)
+		defer cancel()
+		job(ctx)
+	})
 }
 
 const (
@@ -61,14 +71,9 @@ func (b *MetaBackend) startCatchUp(rec threadRec) {
 		return
 	}
 	gen := b.generation()
-	go func() {
-		defer b.backfills.Delete(key)
-		b.backfillSem <- struct{}{}
-		defer func() { <-b.backfillSem }()
-		ctx, cancel := context.WithTimeout(context.Background(), backfillTimeout)
-		defer cancel()
+	b.runLimited(key, "catch_up", func(ctx context.Context) {
 		b.runCatchUp(ctx, rec, gen)
-	}()
+	})
 }
 
 func (b *MetaBackend) runCatchUp(ctx context.Context, rec threadRec, gen uint64) {

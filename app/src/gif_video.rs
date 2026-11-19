@@ -84,7 +84,7 @@ fn inferred_stride(length: usize, width: u32, height: u32, default: i32) -> i32 
     let minimum = width as usize * 4;
     let measured = (height > 0)
         .then(|| length / height as usize)
-        .filter(|pitch| *pitch >= minimum && length % height as usize == 0);
+        .filter(|pitch| *pitch >= minimum && length.is_multiple_of(height as usize));
     match measured {
         Some(pitch) if default < 0 => -(pitch as i32),
         Some(pitch) => pitch as i32,
@@ -188,11 +188,10 @@ fn read_frames(path: &Path) -> anyhow::Result<Vec<image::Frame>> {
             if at_ms > MAX_DURATION_MS {
                 break;
             }
-            if let Some((_, previous)) = &pending {
-                if at_ms - previous < MIN_FRAME_MS {
+            if let Some((_, previous)) = &pending
+                && at_ms - previous < MIN_FRAME_MS {
                     continue;
                 }
-            }
             let Some(image) =
                 frame_image(&sample, width, height, stride, out_width, out_height)?
             else {

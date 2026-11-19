@@ -807,7 +807,7 @@ impl MissiveApp {
                                         .when(row == selected, |el| el.bg(p.accent_soft))
                                         .when(row != selected, |el| el.hover(move |s| s.bg(hover)))
                                         .child(thread_avatar(
-                                            self.avatar_spec(&thread),
+                                            self.avatar_spec(thread),
                                             34.,
                                             p.panel,
                                             p,

@@ -61,6 +61,7 @@ func (b *MetaBackend) handleTable(tbl *table.LSTable, mode tableMode) {
 	if tbl == nil {
 		return
 	}
+	defer b.recoverHandler("table")
 	b.sessionMu.RLock()
 	defer b.sessionMu.RUnlock()
 	if b.closed.Load() {
@@ -82,7 +83,7 @@ func (b *MetaBackend) handleTable(tbl *table.LSTable, mode tableMode) {
 	tc.handleContacts(tbl)
 	tc.handleThreads(tbl)
 	tc.handleParticipants(tbl)
-	tc.handleV11(tbl)
+	tc.handleThreadSettings(tbl)
 	tc.handleThreadDeletes(tbl)
 	tc.handleMessages(tbl)
 	tc.handlePollSnapshots(tbl)
@@ -457,7 +458,7 @@ func (tc *tableContext) handleMessages(tbl *table.LSTable) {
 			prev, existed := store.PutMessage(msg)
 			if !existed {
 				tc.noteQuiet(msg)
-			} else if messageChanged(prev, msg) {
+			} else if msg = keepUnsentContent(prev, msg); messageChanged(prev, msg) {
 				b.emitMessage(EventMessageUpdate, msg)
 			}
 		}
@@ -484,7 +485,7 @@ func (tc *tableContext) handleMessages(tbl *table.LSTable) {
 		tc.previousLatest(id)
 		prev, existed := store.PutMessage(msg)
 		if existed {
-			if messageChanged(prev, msg) {
+			if msg = keepUnsentContent(prev, msg); messageChanged(prev, msg) {
 				b.emitMessage(EventMessageUpdate, msg)
 			}
 			continue
@@ -525,22 +526,8 @@ func (tc *tableContext) handleMessages(tbl *table.LSTable) {
 	}
 	for _, del := range tbl.LSDeleteThenInsertMessage {
 		if del.IsUnsent {
-			tc.markDeleted(del.MessageId)
+			b.markUnsent(del.MessageId)
 		}
-	}
-}
-
-func (tc *tableContext) markDeleted(messageID string) {
-	if updated, ok := tc.b.store.UpdateMessage(messageID, func(m *Message) bool {
-		if m.Deleted {
-			return false
-		}
-		m.Deleted = true
-		m.Text = ""
-		m.Attachments = []Attachment{}
-		return true
-	}); ok {
-		tc.b.emitMessage(EventMessageUpdate, updated)
 	}
 }
 
@@ -611,6 +598,7 @@ func (tc *tableContext) handlePresence(tbl *table.LSTable) {
 		if user == store.SelfID() {
 			continue
 		}
+		tc.b.countPresence(&tc.b.presenceLS, "ls")
 		online := p.Status == lsPresenceActive && (p.ExpirationTimestampMs == 0 || p.ExpirationTimestampMs > now)
 		if store.SetPresence(user, online, p.LastActiveTimestampMs, p.ExpirationTimestampMs) {
 			for _, id := range store.ThreadsWithUser(user) {

@@ -56,7 +56,7 @@ func (d *DemoBackend) mediaThumb(messageID string, att Attachment) (MediaResult,
 	default:
 		return MediaResult{}, newError(CodeNotFound, "attachment %s has no thumbnail", att.ID)
 	}
-	path := thumbPath(d.dataDir, messageID, att.ID)
+	path := thumbPath(d.cacheDir, messageID, att.ID)
 	if res, ok := readThumbResult(path); ok {
 		return res, nil
 	}
@@ -103,7 +103,7 @@ func (d *DemoBackend) Media(ctx context.Context, threadID, messageID, attachment
 	if err != nil {
 		return MediaResult{}, err
 	}
-	path, mimeType, err := saveMediaFile(d.dataDir, data, mimeType, att.FileName)
+	path, mimeType, err := saveMediaFile(d.cacheDir, data, mimeType, att.FileName)
 	if err != nil {
 		return MediaResult{}, newError(CodeInternal, "%v", err)
 	}

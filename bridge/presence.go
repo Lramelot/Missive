@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"strconv"
+	"sync/atomic"
 	"time"
 
 	"go.mau.fi/mautrix-meta/pkg/messagix"
@@ -39,6 +40,25 @@ func (s *Store) presenceLocked(userID string) (*bool, int64) {
 	}
 	online := rec.Online && (rec.ExpiresMS == 0 || rec.ExpiresMS > time.Now().UnixMilli())
 	return &online, rec.LastActiveMS
+}
+
+func (s *Store) PresenceStats() (known, online int) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	now := time.Now().UnixMilli()
+	for _, rec := range s.presence {
+		known++
+		if rec.Online && (rec.ExpiresMS == 0 || rec.ExpiresMS > now) {
+			online++
+		}
+	}
+	return
+}
+
+func (b *MetaBackend) countPresence(counter *atomic.Int64, source string) {
+	if counter.Add(1) == 1 {
+		b.log.Info().Str("source", source).Msg("First presence update received")
+	}
 }
 
 func (s *Store) ClearPresence() []string {

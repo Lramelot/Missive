@@ -382,11 +382,24 @@ fn not_connected(err: &anyhow::Error) -> bool {
 }
 
 fn send_uncertain(err: &anyhow::Error) -> bool {
-    err.downcast_ref::<crate::bridge::BridgeError>()
-        .and_then(|e| e.data.as_ref())
-        .and_then(|data| data.get("uncertain"))
-        .and_then(|v| v.as_bool())
-        .unwrap_or(false)
+    let Some(error) = err.downcast_ref::<crate::bridge::BridgeError>() else {
+        return false;
+    };
+    matches!(error.code.as_str(), "timeout" | "bridge_stopped")
+        || error
+            .data
+            .as_ref()
+            .and_then(|data| data.get("uncertain"))
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false)
+}
+
+fn save_rescued_drafts(
+    slot: &crate::storage::SaveSlot,
+    path: &std::path::Path,
+    drafts: &std::collections::HashMap<String, String>,
+) -> bool {
+    slot.save_path(slot.ticket(), path, drafts)
 }
 
 impl MissiveApp {
@@ -577,18 +590,29 @@ impl MissiveApp {
             ImageFormat::Bmp => "bmp",
             _ => "png",
         };
-        let Some(dir) = dirs::data_dir().map(|dir| dir.join("Missive").join("outgoing")) else {
+        let Some(dir) = super::outgoing_dir() else {
             return false;
         };
-        if std::fs::create_dir_all(&dir).is_err() {
-            return false;
-        }
         let stamp = chrono::Local::now().format("%Y%m%d-%H%M%S-%3f");
         let path = dir.join(format!("capture-{stamp}.{extension}"));
-        if std::fs::write(&path, &image.bytes).is_err() {
-            return false;
-        }
-        self.add_pending([path], cx);
+        let bytes = image.bytes.clone();
+        let target = path.clone();
+        cx.spawn(async move |this, cx| {
+            let written = cx
+                .background_executor()
+                .spawn(async move {
+                    std::fs::create_dir_all(&dir)?;
+                    std::fs::write(&target, bytes)
+                })
+                .await;
+            match written {
+                Ok(()) => {
+                    let _ = this.update(cx, |this, cx| this.add_pending([path], cx));
+                }
+                Err(err) => eprintln!("[app] pasted image not saved: {:?}", err.kind()),
+            }
+        })
+        .detach();
         true
     }
 
@@ -882,7 +906,6 @@ impl MissiveApp {
             timestamp_ms: chrono::Utc::now().timestamp_millis(),
             is_outgoing: true,
             attachments,
-            reply_to_id: request.reply_to.clone(),
             reply_to: reply_preview,
             ..Message::default()
         }
@@ -939,15 +962,14 @@ impl MissiveApp {
             self.scheduled_send_finished(&client_id, Some(offline_cancelled().to_string()), cx);
         }
         let is_selected = self.selected.as_deref() == Some(request.thread_id.as_str());
-        if let Some(list) = self.messages.get_mut(&request.thread_id) {
-            if let Some(index) = list.iter().position(|m| m.id == client_id) {
+        if let Some(list) = self.messages.get_mut(&request.thread_id)
+            && let Some(index) = list.iter().position(|m| m.id == client_id) {
                 list.remove(index);
                 if is_selected {
                     self.scroller
                         .update(cx, |scroller, cx| scroller.splice(index..index + 1, 0, cx));
                 }
             }
-        }
         self.remeasure_last_outgoing(&request.thread_id, cx);
         cx.notify();
     }
@@ -1073,8 +1095,8 @@ impl MissiveApp {
                 .iter()
                 .position(|a| a.kind == attachment.kind)
                 .map(|i| format!("local{i}"));
-            if let Some(local) = local {
-                if let Some(Media::Ready(path)) = self
+            if let Some(local) = local
+                && let Some(Media::Ready(path)) = self
                     .media
                     .get(&super::thumb_key(&client_id, &local))
                     .cloned()
@@ -1083,7 +1105,6 @@ impl MissiveApp {
                         .entry(super::thumb_key(&echo.id, &attachment.id))
                         .or_insert(Media::Ready(path));
                 }
-            }
         }
         let Some(list) = self.messages.get_mut(&echo.thread_id) else {
             return false;
@@ -1157,7 +1178,7 @@ impl MissiveApp {
 
     pub(crate) fn rescue_unsent_texts(&mut self, cx: &App) {
         let mut rescued: Vec<(String, String)> = Vec::new();
-        for (thread_id, list) in &self.messages {
+        for (thread_id, list) in self.messages.iter() {
             for message in list {
                 let Some(request) = self.outgoing_requests.get(&message.id) else {
                     continue;
@@ -1189,7 +1210,9 @@ impl MissiveApp {
                 drafts.insert(thread_id, merged);
             }
         }
-        crate::storage::save_json(super::DRAFTS_FILE, &drafts);
+        if let Some(path) = crate::storage::data_file(super::DRAFTS_FILE) {
+            save_rescued_drafts(&super::DRAFT_SAVES, &path, &drafts);
+        }
         self.drafts_saved = drafts.clone();
         self.drafts = drafts;
     }
@@ -1309,7 +1332,7 @@ impl MissiveApp {
             input.focus(window, cx);
         });
         push_recent_emoji(&mut self.settings.recent_emojis, emoji);
-        self.settings.save();
+        self.mark_settings_dirty();
         self.on_composer_changed(cx);
         cx.notify();
     }
@@ -1320,8 +1343,52 @@ mod tests {
     use std::time::{Duration, Instant};
 
     use super::{
-        OFFLINE_EXPIRY, OfflineQueue, Queued, merge_draft, push_recent_emoji, search_emojis,
+        OFFLINE_EXPIRY, OfflineQueue, Queued, merge_draft, push_recent_emoji, save_rescued_drafts,
+        search_emojis, send_uncertain,
     };
+    use crate::bridge::BridgeError;
+
+    fn bridge_error(code: &str, data: Option<serde_json::Value>) -> anyhow::Error {
+        anyhow::Error::new(BridgeError {
+            code: code.into(),
+            message: String::new(),
+            data,
+        })
+    }
+
+    #[::core::prelude::v1::test]
+    fn sends_without_an_answer_are_unconfirmed_not_failed() {
+        assert!(send_uncertain(&bridge_error("timeout", None)));
+        assert!(send_uncertain(&bridge_error("bridge_stopped", None)));
+        assert!(send_uncertain(&bridge_error(
+            "send_failed",
+            Some(serde_json::json!({ "uncertain": true }))
+        )));
+        assert!(!send_uncertain(&bridge_error("not_connected", None)));
+        assert!(!send_uncertain(&bridge_error("bad_request", None)));
+        assert!(!send_uncertain(&anyhow::anyhow!("timeout")));
+    }
+
+    #[::core::prelude::v1::test]
+    fn an_older_background_draft_save_cannot_overwrite_rescued_texts() {
+        let dir = std::env::temp_dir().join(format!(
+            "missive-rescue-{}-{}",
+            std::process::id(),
+            chrono::Utc::now().timestamp_nanos_opt().unwrap_or_default()
+        ));
+        let path = dir.join("drafts.json");
+        let slot = crate::storage::SaveSlot::new();
+        let background = slot.ticket();
+        let rescued: std::collections::HashMap<String, String> =
+            [("t1".to_string(), "unsent".to_string())].into();
+        assert!(save_rescued_drafts(&slot, &path, &rescued));
+        let empty: std::collections::HashMap<String, String> = Default::default();
+        assert!(!slot.save_path(background, &path, &empty));
+        let stored: std::collections::HashMap<String, String> =
+            serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+        assert_eq!(stored, rescued);
+        let _ = std::fs::remove_dir_all(dir);
+    }
 
     fn enqueue(queue: &mut OfflineQueue, client: &str, thread: &str, now: Instant) {
         let (seq, at) = queue.origin(client, now);

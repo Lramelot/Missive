@@ -55,6 +55,10 @@ disque avec la protection de données de Windows (DPAPI).
 - Les cookies, jetons et le cache des messages sont chiffrés sur le disque
   (`%APPDATA%\Missive\bridge`). La base de clés du chiffrement de bout en bout et les médias
   téléchargés ne le sont pas ; ils restent protégés par les droits de votre compte Windows.
+- Les médias téléchargés, miniatures et photos de profil sont gardés dans un cache local
+  (`%LOCALAPPDATA%\Missive\cache`), hors du profil itinérant : ils ne sont pas recopiés sur les
+  autres ordinateurs d'un compte de domaine. Missive les y déplace depuis
+  `%APPDATA%\Missive\bridge` au premier démarrage de cette version.
 - Les journaux techniques (`%LOCALAPPDATA%\Missive\logs`) ne contiennent ni texte de message, ni
   noms, ni cookies. « Paramètres → Copier le diagnostic » vous permet de les partager pour signaler
   un bug.

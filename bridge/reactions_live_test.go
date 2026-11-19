@@ -154,7 +154,7 @@ func TestReactionTargetPreview(t *testing.T) {
 
 func TestDemoSimulatesReactionAdded(t *testing.T) {
 	buf := &syncBuffer{}
-	d := NewDemoBackend(t.TempDir(), NewOutput(buf, zerolog.Nop()), zerolog.Nop())
+	d := NewDemoBackend(t.TempDir(), "", NewOutput(buf, zerolog.Nop()), zerolog.Nop())
 	fired := false
 	for i := 0; i < 20 && !fired; i++ {
 		fired = d.simulateReaction()

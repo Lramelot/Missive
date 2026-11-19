@@ -71,7 +71,7 @@ pub(crate) fn normalize_query(raw: &str) -> String {
 }
 
 pub(crate) fn message_matches(message: &Message, query: &str) -> bool {
-    if query.is_empty() || message.system || message.deleted {
+    if query.is_empty() || message.system {
         return false;
     }
     fold(&message.text).contains(query)
@@ -355,7 +355,7 @@ impl MissiveApp {
                 let result = bridge
                     .call::<Vec<Message>>(
                         "messages",
-                        json!({ "thread_id": thread_id, "before_ms": oldest, "limit": OLDER_PAGE }),
+                        json!({ "thread_id": thread_id, "before_ms": super::library::older_page_before(oldest), "limit": OLDER_PAGE }),
                     )
                     .await;
                 let merged = this
@@ -418,7 +418,7 @@ impl MissiveApp {
         let next = stepped_text_size(self.settings.text_size, step);
         if next != self.settings.text_size {
             self.settings.text_size = next;
-            self.settings.save();
+            self.mark_settings_dirty();
             self.on_appearance_changed(cx);
         }
         self.show_toast(text_size_notice(next), cx);
@@ -475,7 +475,7 @@ mod tests {
             ..message("d", "crêpes")
         };
         let list = vec![link, file, system, deleted, message("e", "CREPES !")];
-        assert_eq!(match_indices(&list, &normalize_query("crepes")), [0, 1, 4]);
+        assert_eq!(match_indices(&list, &normalize_query("crepes")), [0, 1, 3, 4]);
     }
 
     #[::core::prelude::v1::test]

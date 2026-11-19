@@ -157,6 +157,23 @@ pub(crate) fn apply_vote(poll: &mut Poll, selected: &[String], me: &Reactor) {
     poll.total_votes = total;
 }
 
+pub(crate) fn mark_unsent(message: &mut Message) {
+    message.deleted = true;
+}
+
+pub(crate) fn revert_unsent(message: &mut Message, original: Message) {
+    if !message.deleted {
+        return;
+    }
+    message.deleted = original.deleted;
+    if !message.has_content() {
+        message.text = original.text;
+        message.attachments = original.attachments;
+        message.mentions = original.mentions;
+        message.poll = original.poll;
+    }
+}
+
 pub(crate) fn toggle_option(mut selected: Vec<String>, option_id: &str) -> Vec<String> {
     match selected.iter().position(|id| id == option_id) {
         Some(position) => {
@@ -255,6 +272,7 @@ impl MissiveApp {
     }
 
     pub(crate) fn remeasure_last_outgoing(&mut self, thread_id: &str, cx: &mut Context<Self>) {
+        self.messages.touch(thread_id);
         if self.selected.as_deref() != Some(thread_id) {
             return;
         }
@@ -533,18 +551,9 @@ impl MissiveApp {
         if self.message_ops.is_editing(&message.id) {
             self.cancel_edit(None, cx);
         }
-        let Some(original) = self.mutate_message(
-            &message.thread_id,
-            &message.id,
-            |message| {
-                message.deleted = true;
-                message.text.clear();
-                message.attachments.clear();
-                message.mentions.clear();
-                message.poll = None;
-            },
-            cx,
-        ) else {
+        let Some(original) =
+            self.mutate_message(&message.thread_id, &message.id, mark_unsent, cx)
+        else {
             return;
         };
         if self.reply_to.as_ref().is_some_and(|m| m.id == message.id) {
@@ -555,18 +564,12 @@ impl MissiveApp {
         cx.spawn(async move |this, cx| {
             if let Err(err) = bridge.request("unsend", params).await {
                 let _ = this.update(cx, |this, cx| {
+                    let thread_id = original.thread_id.clone();
+                    let message_id = original.id.clone();
                     this.mutate_message(
-                        &original.thread_id,
-                        &original.id,
-                        |message| {
-                            if message.deleted && message.text.is_empty() {
-                                message.deleted = original.deleted;
-                                message.text = original.text;
-                                message.attachments = original.attachments;
-                                message.mentions = original.mentions;
-                                message.poll = original.poll;
-                            }
-                        },
+                        &thread_id,
+                        &message_id,
+                        |message| revert_unsent(message, original),
                         cx,
                     );
                     this.show_toast(
@@ -1119,7 +1122,7 @@ impl MissiveApp {
                 let result = bridge
                     .call::<Vec<Message>>(
                         "messages",
-                        json!({ "thread_id": thread_id, "before_ms": oldest, "limit": JUMP_PAGE }),
+                        json!({ "thread_id": thread_id, "before_ms": super::library::older_page_before(oldest), "limit": JUMP_PAGE }),
                     )
                     .await;
                 let merged = this
@@ -1192,14 +1195,11 @@ impl MissiveApp {
         if self.generation(thread_id) != generation || !self.messages.contains_key(thread_id) {
             return None;
         }
-        let mut older = result.ok()?;
-        let known: std::collections::HashSet<String> = self
-            .messages
-            .get(thread_id)
-            .map(|list| list.iter().map(|m| m.id.clone()).collect())
-            .unwrap_or_default();
-        older.retain(|message| message.timestamp_ms < oldest && !known.contains(&message.id));
-        older.sort_by_key(|message| message.timestamp_ms);
+        let (mut older, _) = super::library::older_page_additions(
+            self.messages.get(thread_id).map(Vec::as_slice).unwrap_or_default(),
+            result.ok()?,
+            oldest,
+        );
         let count = older.len();
         if count == 0 {
             return Some(0);
@@ -1221,8 +1221,40 @@ impl MissiveApp {
 
 #[cfg(test)]
 mod tests {
-    use super::{apply_vote, toggle_option};
-    use crate::model::{Poll, PollOption, Reactor};
+    use super::{apply_vote, mark_unsent, revert_unsent, toggle_option};
+    use crate::model::{Attachment, Message, Poll, PollOption, Reactor};
+
+    #[::core::prelude::v1::test]
+    fn optimistic_unsend_keeps_the_content() {
+        let original = Message {
+            id: "m".into(),
+            text: "rendez-vous à 8h".into(),
+            attachments: vec![Attachment {
+                kind: "image".into(),
+                ..Attachment::default()
+            }],
+            poll: Some(poll()),
+            ..Message::default()
+        };
+        let mut message = original.clone();
+        mark_unsent(&mut message);
+        assert!(message.deleted);
+        assert_eq!(message.text, original.text);
+        assert_eq!(message.attachments.len(), 1);
+        assert!(message.poll.is_some());
+        revert_unsent(&mut message, original.clone());
+        assert!(!message.deleted);
+        assert_eq!(message.text, original.text);
+
+        let mut emptied = Message {
+            deleted: true,
+            ..Message::default()
+        };
+        revert_unsent(&mut emptied, original.clone());
+        assert!(!emptied.deleted);
+        assert_eq!(emptied.text, original.text);
+        assert!(emptied.poll.is_some());
+    }
 
     fn poll() -> Poll {
         Poll {

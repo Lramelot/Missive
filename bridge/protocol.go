@@ -279,6 +279,10 @@ type Reactor struct {
 	TimestampMS int64  `json:"timestamp_ms,omitempty"`
 }
 
+func (m Message) hasContent() bool {
+	return m.Text != "" || len(m.Attachments) > 0 || m.Poll != nil
+}
+
 func (m Message) normalized() Message {
 	if m.Attachments == nil {
 		m.Attachments = []Attachment{}

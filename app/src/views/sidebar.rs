@@ -22,6 +22,14 @@ use crate::{
 const ROW_HEIGHT: f32 = 68.;
 const ROW_GAP: f32 = 2.;
 
+fn search_shortcut_label() -> &'static str {
+    shortcut_label(cfg!(target_os = "macos"))
+}
+
+fn shortcut_label(mac: bool) -> &'static str {
+    if mac { "⌘K" } else { "Ctrl K" }
+}
+
 impl MissiveApp {
     pub(super) fn render_sidebar(&self, p: &Palette, cx: &mut Context<Self>) -> impl IntoElement {
         let view = cx.entity();
@@ -136,7 +144,7 @@ impl MissiveApp {
                                 .text_size(px(11.5))
                                 .font_weight(FontWeight::SEMIBOLD)
                                 .text_color(p.text_muted)
-                                .child("Ctrl K"),
+                                .child(search_shortcut_label()),
                         )
                     })
                     .child(
@@ -929,5 +937,16 @@ pub(super) fn display_name(thread: &Thread) -> String {
         t!("sidebar.conversation").into_owned()
     } else {
         thread.name.clone()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::shortcut_label;
+
+    #[::core::prelude::v1::test]
+    fn search_shortcut_uses_the_command_key_on_macos() {
+        assert_eq!(shortcut_label(true), "⌘K");
+        assert_eq!(shortcut_label(false), "Ctrl K");
     }
 }

@@ -99,6 +99,10 @@ impl MissiveApp {
                         this.last_slow_tick = std::time::Instant::now();
                         this.tick_planner(cx);
                         this.persist_drafts(cx);
+                        this.flush_settings(cx);
+                        if this.expire_typing(std::time::Instant::now()) {
+                            cx.notify();
+                        }
                     }
                     if this.instance.take_show_request() {
                         desktop::show_window(window);
@@ -145,11 +149,10 @@ impl MissiveApp {
         if matches!(self.update, Some(UpdateState::Downloading { .. })) {
             return;
         }
-        if let Some(version) = updates::pending_restart() {
-            if self.update.is_none() {
+        if let Some(version) = updates::pending_restart()
+            && self.update.is_none() {
                 eprintln!("[app] update {version} already downloaded, applied at next start");
             }
-        }
         cx.spawn(async move |this, cx| {
             let found = cx
                 .background_executor()
@@ -222,12 +225,11 @@ impl MissiveApp {
         if self.settings == before {
             return;
         }
-        if self.settings.launch_at_login != before.launch_at_login {
-            if let Err(err) = desktop::set_launch_at_login(self.settings.launch_at_login) {
+        if self.settings.launch_at_login != before.launch_at_login
+            && let Err(err) = desktop::set_launch_at_login(self.settings.launch_at_login) {
                 self.settings.launch_at_login = before.launch_at_login;
                 self.set_error(err.context(t!("system.error.launch_at_login_failed").into_owned()));
             }
-        }
         if self.settings.theme != before.theme {
             style::apply_theme(self.settings.theme, Some(window), cx);
         }
@@ -253,7 +255,7 @@ impl MissiveApp {
         if self.settings.check_updates && !before.check_updates {
             self.check_for_update(cx);
         }
-        self.settings.save();
+        self.mark_settings_dirty();
         cx.notify();
     }
 
@@ -298,10 +300,7 @@ impl MissiveApp {
             }
             ToastAction::Reply { thread_id, text } => {
                 let main = matches!(self.screen, Screen::Main);
-                let request = match self.threads.iter().find(|thread| thread.id == thread_id) {
-                    Some(thread) => Some(self.is_request_thread(thread)),
-                    None => None,
-                };
+                let request = self.threads.iter().find(|thread| thread.id == thread_id).map(|thread| self.is_request_thread(thread));
                 if main && request == Some(false) {
                     self.send_text_to(thread_id, text, None, cx);
                     cx.notify();
@@ -428,6 +427,8 @@ impl MissiveApp {
                     Ok(_) => {
                         this.reset_account_state();
                         this.erase_local_account_data();
+                        this.flush_settings(cx);
+                        this.clear_outgoing(cx);
                         this.search.update(cx, |input, cx| input.clean(window, cx));
                         this.composer
                             .update(cx, |input, cx| input.clean(window, cx));
