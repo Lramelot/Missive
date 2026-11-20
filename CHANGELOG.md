@@ -7,6 +7,13 @@ the format is based on [Keep a Changelog](https://keepachangelog.com).
 
 ## [Unreleased]
 
+### Fixed
+
+- Voice messages in end-to-end encrypted conversations play in Missive. They use the Opus format,
+  which the built-in player could not decode: Missive now converts them when they are downloaded.
+- Videos and files larger than 64 MB open, up to 1 GB. Before, their download was refused.
+- Videos in encrypted conversations show their thumbnail instead of a black frame.
+
 ## [0.3.0] - 2026-11-19
 
 ### Added

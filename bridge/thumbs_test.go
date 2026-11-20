@@ -191,3 +191,25 @@ func TestDownloadableE2EEThumb(t *testing.T) {
 		t.Fatal("thumbnail download details must survive a store reload")
 	}
 }
+
+func TestVideoThumbRetriesWithImageKeys(t *testing.T) {
+	b, _, _ := loggedInBackend(t)
+	var types []whatsmeow.MediaType
+	b.waThumbFn = func(ctx context.Context, ref waThumbRef) ([]byte, error) {
+		types = append(types, ref.MediaType)
+		if ref.MediaType != whatsmeow.MediaImage {
+			return nil, fmt.Errorf("download: %w", whatsmeow.ErrInvalidMediaHMAC)
+		}
+		return encodedImage(t, 300, 200, true), nil
+	}
+	b.store.PutMessage(Message{ID: "vid", ThreadID: "5", TimestampMS: 1, Attachments: []Attachment{{ID: "a", Kind: "video"}}})
+	b.store.PutMedia("vid", "a", mediaRec{Kind: "video", WAType: string(whatsmeow.MediaVideo), WATransport: downloadableTransport(t, nil)})
+
+	res, err := b.Media(context.Background(), "5", "vid", "a", VariantThumb)
+	if err != nil || res.Width != 300 {
+		t.Fatalf("a video poster encrypted with image keys must still load: %+v %v", res, err)
+	}
+	if len(types) != 2 || types[0] != whatsmeow.MediaVideo || types[1] != whatsmeow.MediaImage {
+		t.Fatalf("expected a video-key attempt then an image-key retry, got %v", types)
+	}
+}

@@ -21,6 +21,7 @@ import (
 const (
 	mediaDirName        = "media"
 	maxMediaBytes       = 64 << 20
+	maxLargeMediaBytes  = 1 << 30
 	maxPreviewBytes     = 8 << 20
 	mediaHTTPTimeout    = 2 * time.Minute
 	maxMediaRedirects   = 5
@@ -49,6 +50,8 @@ var mimeExtensions = map[string]string{
 	"audio/mp4":        ".m4a",
 	"audio/aac":        ".aac",
 	"audio/ogg":        ".ogg",
+	"application/ogg":  ".ogg",
+	"audio/opus":       ".opus",
 	"audio/wav":        ".wav",
 	"audio/x-wav":      ".wav",
 	"application/pdf":  ".pdf",
@@ -83,6 +86,16 @@ func defaultMediaURLAllowed(u *url.URL) bool {
 }
 
 var mediaURLAllowed = defaultMediaURLAllowed
+
+func maxDownloadBytes(kind string) int64 {
+	switch kind {
+	case "link", "other":
+		return maxPreviewBytes
+	case "video", "file":
+		return maxLargeMediaBytes
+	}
+	return maxMediaBytes
+}
 
 func extensionFor(mimeType, fileName string) string {
 	if ext := strings.ToLower(filepath.Ext(fileName)); allowedFileExtensions[ext] {

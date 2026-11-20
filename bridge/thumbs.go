@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"image"
 	_ "image/gif"
@@ -241,6 +242,10 @@ func (b *MetaBackend) mediaThumb(ctx context.Context, messageID string, att Atta
 	}
 	if ref, ok := downloadableThumbnail(rec); ok {
 		data, err := b.downloadWAThumb(ctx, ref)
+		if errors.Is(err, whatsmeow.ErrInvalidMediaHMAC) && ref.MediaType != whatsmeow.MediaImage {
+			ref.MediaType = whatsmeow.MediaImage
+			data, err = b.downloadWAThumb(ctx, ref)
+		}
 		if err == nil {
 			res, err := thumbFromBytes(path, data)
 			if err == nil {

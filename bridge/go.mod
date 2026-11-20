@@ -1,12 +1,13 @@
 module missive/bridge
 
-go 1.26.0
+go 1.27
 
 require (
 	github.com/braheezy/shine-mp3 v0.2.0
 	github.com/coder/websocket v1.8.15
 	github.com/google/uuid v1.6.0
 	github.com/rs/zerolog v1.35.1
+	github.com/tphakala/go-opus v1.4.0
 	go.mau.fi/mautrix-meta v0.2610.1-0.20261116102523-e4dcf7185f79
 	go.mau.fi/util v0.11.1-0.20261026174803-9e6b9c87cfbc
 	go.mau.fi/whatsmeow v0.0.0-20261027104441-1eec1136a50b
@@ -48,6 +49,7 @@ require (
 	github.com/tidwall/match v1.1.1 // indirect
 	github.com/tidwall/pretty v1.2.1 // indirect
 	github.com/tidwall/sjson v1.2.5 // indirect
+	github.com/tphakala/simd v1.14.0 // indirect
 	github.com/vektah/gqlparser/v2 v2.5.27 // indirect
 	github.com/vmihailenco/msgpack/v5 v5.2.0 // indirect
 	github.com/vmihailenco/tagparser/v2 v2.0.0 // indirect

@@ -8,6 +8,15 @@ Les changements notables de Missive sont listés ici. Les versions suivent le
 
 ## [Non publié]
 
+### Corrigé
+
+- Les messages vocaux des conversations chiffrées de bout en bout se lisent dans Missive. Ils sont
+  au format Opus, que le lecteur intégré ne savait pas décoder : Missive les convertit désormais au
+  téléchargement.
+- Les vidéos et fichiers de plus de 64 Mo s'ouvrent, jusqu'à 1 Go. Avant, leur téléchargement était
+  refusé.
+- Les vidéos des conversations chiffrées affichent leur miniature au lieu d'un cadre noir.
+
 ## [0.3.0] - 2026-11-19
 
 ### Ajouté

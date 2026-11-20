@@ -39,10 +39,7 @@ func (b *MetaBackend) mediaSource(messageID string, att Attachment) (mediaRec, e
 }
 
 func (b *MetaBackend) downloadMediaTo(ctx context.Context, rec mediaRec, att Attachment, f *os.File) (string, error) {
-	maxBytes := int64(maxMediaBytes)
-	if att.Kind == "link" || att.Kind == "other" {
-		maxBytes = maxPreviewBytes
-	}
+	maxBytes := maxDownloadBytes(att.Kind)
 	if rec.WATransport == nil && rec.ReceiverFetchID == "" && rec.URL == "" {
 		return "", newError(CodeNotFound, "attachment %s has no downloadable media", att.ID)
 	}
@@ -80,7 +77,8 @@ func (b *MetaBackend) fullMedia(ctx context.Context, messageID string, att Attac
 		return MediaResult{}, err
 	}
 	if fileExists(rec.Path) {
-		return MediaResult{Path: rec.Path, MimeType: rec.MimeType}, nil
+		path, mimeType := b.playableAudio(messageID, att, rec.Path, rec.MimeType)
+		return MediaResult{Path: path, MimeType: mimeType}, nil
 	}
 	f, err := newMediaTemp(b.cacheDir)
 	if err != nil {
@@ -96,7 +94,21 @@ func (b *MetaBackend) fullMedia(ctx context.Context, messageID string, att Attac
 		return MediaResult{}, newError(CodeInternal, "%v", err)
 	}
 	b.store.SetMediaPath(messageID, att.ID, path, mimeType)
+	path, mimeType = b.playableAudio(messageID, att, path, mimeType)
 	return MediaResult{Path: path, MimeType: mimeType}, nil
+}
+
+func (b *MetaBackend) playableAudio(messageID string, att Attachment, path, mimeType string) (string, string) {
+	if att.Kind != "audio" || !isOggOpus(path) {
+		return path, mimeType
+	}
+	wav, wavType, err := transcodeOggOpus(b.cacheDir, path)
+	if err != nil {
+		b.log.Warn().Err(err).Msg("Opus audio kept undecoded")
+		return path, mimeType
+	}
+	b.store.SetMediaPath(messageID, att.ID, wav, wavType)
+	return wav, wavType
 }
 
 type mediaLock struct {
