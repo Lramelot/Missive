@@ -7,6 +7,13 @@ the format is based on [Keep a Changelog](https://keepachangelog.com).
 
 ## [Unreleased]
 
+### Added
+
+- Voice messages can play at 1.25×, 1.5× or 2× without the voice sounding higher. The speed button
+  appears on the message being played, and the chosen speed is remembered.
+- Videos play in a Missive window, with sound, seeking and full screen, instead of opening in another
+  app. A video Missive cannot decode still opens in the default player. Escape closes the window.
+
 ## [0.3.1] - 2026-11-20
 
 ### Fixed

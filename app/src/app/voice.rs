@@ -228,9 +228,18 @@ impl MissiveApp {
         .detach();
     }
 
+    pub(crate) fn cycle_voice_speed(&mut self, cx: &mut Context<Self>) {
+        self.settings.voice_speed = self.settings.voice_speed.next();
+        if let Some(player) = &self.voice.player {
+            player.set_speed(self.settings.voice_speed.factor());
+        }
+        self.mark_settings_dirty();
+        cx.notify();
+    }
+
     fn begin_audio(&mut self, key: String, path: PathBuf, start_ms: i64, cx: &mut Context<Self>) {
         if self.voice.player.is_none() {
-            match AudioPlayer::spawn() {
+            match AudioPlayer::spawn(self.settings.voice_speed.factor()) {
                 Ok(player) => self.voice.player = Some(player),
                 Err(err) => {
                     eprintln!("[voice] audio thread failed: {err:#}");

@@ -52,6 +52,37 @@ impl TextSize {
     }
 }
 
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum VoiceSpeed {
+    Faster,
+    Fast,
+    Double,
+    #[default]
+    #[serde(other)]
+    Normal,
+}
+
+impl VoiceSpeed {
+    pub fn factor(self) -> f32 {
+        match self {
+            VoiceSpeed::Normal => 1.0,
+            VoiceSpeed::Faster => 1.25,
+            VoiceSpeed::Fast => 1.5,
+            VoiceSpeed::Double => 2.0,
+        }
+    }
+
+    pub fn next(self) -> Self {
+        match self {
+            VoiceSpeed::Normal => VoiceSpeed::Faster,
+            VoiceSpeed::Faster => VoiceSpeed::Fast,
+            VoiceSpeed::Fast => VoiceSpeed::Double,
+            VoiceSpeed::Double => VoiceSpeed::Normal,
+        }
+    }
+}
+
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Snippet {
@@ -109,6 +140,7 @@ pub struct Settings {
     pub text_size: TextSize,
     pub compact: bool,
     pub recent_emojis: Vec<String>,
+    pub voice_speed: VoiceSpeed,
 }
 
 impl Default for Settings {
@@ -134,6 +166,7 @@ impl Default for Settings {
             text_size: TextSize::Normal,
             compact: false,
             recent_emojis: Vec::new(),
+            voice_speed: VoiceSpeed::Normal,
         }
     }
 }
@@ -240,7 +273,30 @@ impl Settings {
 
 #[cfg(test)]
 mod tests {
-    use super::{Language, SETTINGS_VERSION, Settings, TextSize, ThemePreference};
+    use super::{Language, SETTINGS_VERSION, Settings, TextSize, ThemePreference, VoiceSpeed};
+
+    #[test]
+    fn voice_speed_persists_and_tolerates_unknown_values() {
+        let settings = Settings {
+            voice_speed: VoiceSpeed::Fast,
+            ..Settings::default()
+        };
+        let json = serde_json::to_string(&settings).unwrap();
+        let back: Settings = serde_json::from_str(&json).unwrap();
+        assert_eq!(back.voice_speed, VoiceSpeed::Fast);
+        let old: Settings = serde_json::from_str("{}").unwrap();
+        assert_eq!(old.voice_speed, VoiceSpeed::Normal);
+        let odd: Settings = serde_json::from_str(r#"{"voice_speed":"turbo"}"#).unwrap();
+        assert_eq!(odd.voice_speed, VoiceSpeed::Normal);
+        let mut speed = VoiceSpeed::Normal;
+        let factors: Vec<f32> = (0..5)
+            .map(|_| {
+                speed = speed.next();
+                speed.factor()
+            })
+            .collect();
+        assert_eq!(factors, [1.25, 1.5, 2.0, 1.0, 1.25]);
+    }
 
     fn temp_dir(name: &str) -> std::path::PathBuf {
         let dir = std::env::temp_dir().join(format!(

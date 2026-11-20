@@ -8,6 +8,14 @@ Les changements notables de Missive sont listés ici. Les versions suivent le
 
 ## [Non publié]
 
+### Ajouté
+
+- Les messages vocaux peuvent se lire en 1,25×, 1,5× ou 2× sans que la voix devienne aiguë. Le
+  bouton de vitesse apparaît sur le vocal en cours de lecture, et la vitesse choisie est mémorisée.
+- Les vidéos se lisent dans une fenêtre de Missive, avec le son, l'avance et le plein écran, au lieu
+  de s'ouvrir dans une autre application. Une vidéo que Missive ne sait pas décoder s'ouvre toujours
+  dans le lecteur par défaut. Échap ferme la fenêtre.
+
 ## [0.3.1] - 2026-11-20
 
 ### Corrigé

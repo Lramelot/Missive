@@ -8,6 +8,7 @@ use crate::{
     app::{Media, MissiveApp, media_key},
     audio::{WAVEFORM_BARS, bucket_waveform, pseudo_waveform},
     model::{Attachment, Message, Thread},
+    settings::VoiceSpeed,
     style::{Palette, with_alpha},
 };
 
@@ -218,6 +219,31 @@ impl MissiveApp {
         };
         let round = px(super::message::BUBBLE_RADIUS);
         let tail = px(super::message::BUBBLE_TAIL);
+        let speed_button = (playback.is_some() && !local && !undecodable).then(|| {
+            let label = match self.settings.voice_speed {
+                VoiceSpeed::Normal => ts!("voice_view.speed.normal"),
+                VoiceSpeed::Faster => ts!("voice_view.speed.faster"),
+                VoiceSpeed::Fast => ts!("voice_view.speed.fast"),
+                VoiceSpeed::Double => ts!("voice_view.speed.double"),
+            };
+            let view = view.clone();
+            div()
+                .id(SharedString::from(format!("voice-speed-{key}")))
+                .flex_none()
+                .px(px(7.))
+                .py(px(2.))
+                .rounded_full()
+                .bg(with_alpha(if outgoing { fg } else { p.accent_text }, 0.16))
+                .text_size(px(11.5))
+                .font_weight(FontWeight::BOLD)
+                .text_color(if outgoing { fg } else { p.accent_text })
+                .cursor_pointer()
+                .child(label)
+                .on_click(move |_, _, cx| {
+                    cx.stop_propagation();
+                    view.update(cx, |this, cx| this.cycle_voice_speed(cx));
+                })
+        });
 
         Some(
             h_flex()
@@ -247,6 +273,7 @@ impl MissiveApp {
                         .text_color(if outgoing { fg } else { p.text_muted })
                         .child(label),
                 )
+                .children(speed_button)
                 .into_any_element(),
         )
     }

@@ -54,17 +54,28 @@ enum PlayerCommand {
 pub(crate) struct AudioPlayer {
     commands: mpsc::Sender<PlayerCommand>,
     status: Arc<Mutex<PlaybackStatus>>,
+    speed: Arc<AtomicU32>,
 }
 
 impl AudioPlayer {
-    pub(crate) fn spawn() -> anyhow::Result<Self> {
+    pub(crate) fn spawn(speed: f32) -> anyhow::Result<Self> {
         let (commands, receiver) = mpsc::channel();
         let status = Arc::new(Mutex::new(PlaybackStatus::default()));
+        let speed = crate::stretch::speed_cell(speed);
         let shared = status.clone();
+        let shared_speed = speed.clone();
         std::thread::Builder::new()
             .name("missive-audio-out".into())
-            .spawn(move || player_loop(receiver, shared))?;
-        Ok(Self { commands, status })
+            .spawn(move || player_loop(receiver, shared, shared_speed))?;
+        Ok(Self {
+            commands,
+            status,
+            speed,
+        })
+    }
+
+    pub(crate) fn set_speed(&self, speed: f32) {
+        self.speed.store(speed.to_bits(), Ordering::Relaxed);
     }
 
     pub(crate) fn play(&self, key: String, path: PathBuf, start_ms: i64) {
@@ -130,9 +141,27 @@ fn update_current(
     });
 }
 
-fn player_loop(commands: mpsc::Receiver<PlayerCommand>, status: Arc<Mutex<PlaybackStatus>>) {
+struct Current {
+    player: rodio::Player,
+    key: String,
+    position: Arc<AtomicU64>,
+    rate: u32,
+}
+
+impl Current {
+    fn position_ms(&self) -> i64 {
+        let frames = self.position.load(Ordering::Relaxed);
+        i64::try_from(frames.saturating_mul(1000) / u64::from(self.rate.max(1))).unwrap_or(i64::MAX)
+    }
+}
+
+fn player_loop(
+    commands: mpsc::Receiver<PlayerCommand>,
+    status: Arc<Mutex<PlaybackStatus>>,
+    speed: Arc<AtomicU32>,
+) {
     let mut output: Option<rodio::MixerDeviceSink> = None;
-    let mut player: Option<(rodio::Player, String)> = None;
+    let mut player: Option<Current> = None;
     let mut heard = false;
     let mut idle_since = Instant::now();
     loop {
@@ -149,8 +178,8 @@ fn player_loop(commands: mpsc::Receiver<PlayerCommand>, status: Arc<Mutex<Playba
                 path,
                 start_ms,
             }) => {
-                if let Some((previous, _)) = player.take() {
-                    previous.stop();
+                if let Some(previous) = player.take() {
+                    previous.player.stop();
                 }
                 heard = start_ms > 0;
                 if output.is_none() {
@@ -174,7 +203,7 @@ fn player_loop(commands: mpsc::Receiver<PlayerCommand>, status: Arc<Mutex<Playba
                 let decoder = File::open(&path)
                     .ok()
                     .and_then(|file| rodio::Decoder::try_from(file).ok());
-                let Some(mut decoder) = decoder else {
+                let Some(decoder) = decoder else {
                     update_current(&status, &key, |s| {
                         s.playing = false;
                         s.finished = true;
@@ -183,41 +212,52 @@ fn player_loop(commands: mpsc::Receiver<PlayerCommand>, status: Arc<Mutex<Playba
                     continue;
                 };
                 let duration_ms = decoder.total_duration().map(millis);
+                let rate = decoder.sample_rate().get();
+                let position = Arc::new(AtomicU64::new(0));
+                let mut source =
+                    crate::stretch::TimeStretch::new(decoder, speed.clone(), position.clone());
                 if start_ms > 0 {
-                    let _ = decoder.try_seek(Duration::from_millis(start_ms as u64));
+                    let _ = source.try_seek(Duration::from_millis(start_ms as u64));
                 }
                 let next = rodio::Player::connect_new(sink.mixer());
-                next.append(decoder);
+                next.append(source);
                 next.play();
                 update_current(&status, &key, |s| {
                     s.duration_ms = duration_ms;
                     s.playing = true;
                 });
-                player = Some((next, key));
+                player = Some(Current {
+                    player: next,
+                    key,
+                    position,
+                    rate,
+                });
             }
             Ok(PlayerCommand::Pause) => {
-                if let Some((current, key)) = &player {
-                    current.pause();
-                    update_current(&status, key, |s| s.playing = false);
+                if let Some(current) = &player {
+                    current.player.pause();
+                    update_current(&status, &current.key, |s| s.playing = false);
                 }
             }
             Ok(PlayerCommand::Resume) => {
-                if let Some((current, key)) = &player {
-                    current.play();
-                    update_current(&status, key, |s| s.playing = true);
+                if let Some(current) = &player {
+                    current.player.play();
+                    update_current(&status, &current.key, |s| s.playing = true);
                 }
             }
             Ok(PlayerCommand::Seek(position_ms)) => {
-                if let Some((current, key)) = &player {
+                if let Some(current) = &player {
                     let position_ms = position_ms.max(0);
-                    let _ = current.try_seek(Duration::from_millis(position_ms as u64));
+                    let _ = current
+                        .player
+                        .try_seek(Duration::from_millis(position_ms as u64));
                     heard = heard || position_ms > 0;
-                    update_current(&status, key, |s| s.position_ms = position_ms);
+                    update_current(&status, &current.key, |s| s.position_ms = position_ms);
                 }
             }
             Ok(PlayerCommand::Stop) => {
-                if let Some((previous, _)) = player.take() {
-                    previous.stop();
+                if let Some(previous) = player.take() {
+                    previous.player.stop();
                 }
                 idle_since = Instant::now();
             }
@@ -229,10 +269,11 @@ fn player_loop(commands: mpsc::Receiver<PlayerCommand>, status: Arc<Mutex<Playba
             Err(RecvTimeoutError::Disconnected) => break,
         }
         let finished = match &player {
-            Some((current, key)) => {
-                let position_ms = millis(current.get_pos());
+            Some(current) => {
+                let key = &current.key;
+                let position_ms = current.position_ms();
                 heard = heard || position_ms > 0;
-                if current.empty() {
+                if current.player.empty() {
                     let undecodable = !heard;
                     update_current(&status, key, |s| {
                         s.playing = false;

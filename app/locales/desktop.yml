@@ -45,6 +45,16 @@ login:
   window_failed:
     en: "Could not open the sign-in window: %{error}"
     fr: "Fenêtre de connexion impossible : %{error}"
+video_window:
+  title:
+    en: "Video"
+    fr: "Vidéo"
+  opening:
+    en: "Loading the video…"
+    fr: "Chargement de la vidéo…"
+  fallback:
+    en: "Missive can't play this video, so it opens in your default player"
+    fr: "Missive ne peut pas lire cette vidéo : elle s'ouvre dans le lecteur par défaut"
 diagnostics:
   report:
     header:

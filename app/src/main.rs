@@ -18,6 +18,7 @@ mod model;
 mod notifications;
 mod settings;
 mod storage;
+mod stretch;
 mod style;
 mod timefmt;
 mod updates;

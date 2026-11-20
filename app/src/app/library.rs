@@ -1357,10 +1357,11 @@ impl MissiveApp {
         cx: &mut Context<Self>,
     ) {
         let key = super::media_key(&message.id, &attachment.id);
+        let (width, height) = (attachment.width, attachment.height);
         match self.media.get(&key) {
             Some(Media::Ready(path)) => {
                 let path = path.clone();
-                crate::desktop::open_local(&path, cx);
+                self.open_video_window(path, width, height, cx);
                 return;
             }
             Some(Media::Loading) => return,
@@ -1387,7 +1388,7 @@ impl MissiveApp {
                     Ok(media) => {
                         let path = PathBuf::from(media.path);
                         this.media.insert(key, Media::Ready(path.clone()));
-                        crate::desktop::open_local(&path, cx);
+                        this.open_video_window(path, width, height, cx);
                     }
                     Err(err) => {
                         eprintln!("[app] video download failed: {err:#}");

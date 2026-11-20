@@ -112,7 +112,7 @@ func (d *DemoBackend) Media(ctx context.Context, threadID, messageID, attachment
 }
 
 func demoMediaData(messageID string, att Attachment) ([]byte, string, error) {
-	if att.Kind == "video" && att.Gif {
+	if att.Kind == "video" {
 		if sample := os.Getenv("MISSIVE_DEMO_VIDEO"); sample != "" {
 			if data, err := os.ReadFile(sample); err == nil {
 				return data, "video/mp4", nil

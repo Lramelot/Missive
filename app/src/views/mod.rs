@@ -9,6 +9,7 @@ mod popout;
 mod settings;
 mod sidebar;
 mod thread_dialogs;
+mod video_window;
 mod voice;
 mod widgets;
 

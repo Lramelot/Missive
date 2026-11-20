@@ -162,3 +162,16 @@ voice_view:
     opening_microphone:
       en: "Opening microphone…"
       fr: "Ouverture du micro…"
+  speed:
+    normal:
+      en: "1×"
+      fr: "1×"
+    faster:
+      en: "1.25×"
+      fr: "1,25×"
+    fast:
+      en: "1.5×"
+      fr: "1,5×"
+    double:
+      en: "2×"
+      fr: "2×"
