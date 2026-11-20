@@ -8,6 +8,8 @@ Les changements notables de Missive sont listés ici. Les versions suivent le
 
 ## [Non publié]
 
+## [0.3.1] - 2026-11-20
+
 ### Corrigé
 
 - Les messages vocaux des conversations chiffrées de bout en bout se lisent dans Missive. Ils sont
@@ -118,7 +120,8 @@ Première version publique.
   haut pendant que leur contenu défile.
 - Ouvrir la fenêtre détachée ne fait plus planter l'app.
 
-[Non publié]: https://github.com/Lramelot/Missive/compare/v0.3.0...HEAD
+[Non publié]: https://github.com/Lramelot/Missive/compare/v0.3.1...HEAD
+[0.3.1]: https://github.com/Lramelot/Missive/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/Lramelot/Missive/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/Lramelot/Missive/compare/v0.1.18...v0.2.0
 [0.1.18]: https://github.com/Lramelot/Missive/releases/tag/v0.1.18
