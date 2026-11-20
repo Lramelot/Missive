@@ -8,6 +8,8 @@ Les changements notables de Missive sont listés ici. Les versions suivent le
 
 ## [Non publié]
 
+## [0.3.2] - 2026-11-20
+
 ### Ajouté
 
 - Les messages vocaux peuvent se lire en 1,25×, 1,5× ou 2× sans que la voix devienne aiguë. Le
@@ -128,7 +130,8 @@ Première version publique.
   haut pendant que leur contenu défile.
 - Ouvrir la fenêtre détachée ne fait plus planter l'app.
 
-[Non publié]: https://github.com/Lramelot/Missive/compare/v0.3.1...HEAD
+[Non publié]: https://github.com/Lramelot/Missive/compare/v0.3.2...HEAD
+[0.3.2]: https://github.com/Lramelot/Missive/compare/v0.3.1...v0.3.2
 [0.3.1]: https://github.com/Lramelot/Missive/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/Lramelot/Missive/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/Lramelot/Missive/compare/v0.1.18...v0.2.0
